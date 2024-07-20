@@ -3,8 +3,19 @@ package exeghrepo;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 
@@ -17,6 +28,9 @@ public class ExeGHRepos {
 	private String date = "";
 	private String path = "";
 	private String excludeRepo = "";
+	private String localSHA = "";
+	private String repoPath = "";
+	private boolean checkout = false;
 	private boolean incremental = false;
 	private boolean gradleDebug = false;
 	private boolean debug = false;
@@ -26,12 +40,27 @@ public class ExeGHRepos {
 	private boolean noClone = false;
 	private int testIndex = -1;
 	private ArrayList<String> deleteList;
-	private ArrayList<String> copyList;
+	private ArrayList<FileCopyInfo> copyList;
 	private ArrayList<String> postCommands;
 	private ArrayList<ExeTest> testList;
 	private ExeTest currTest;
 	private HashMap<String,HashMap<String,String>> testResults;
 	private ArrayList<String> repoURLs;
+	
+	private void getMatchingPaths(Path srcPath, String matchPattern, ArrayList<Path> files) throws IOException {
+		final ArrayList<Path> filePaths = new ArrayList<>();
+		final PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:**/"+matchPattern);
+		Files.walkFileTree(srcPath, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				if (matcher.matches(file)) {
+					filePaths.add(file);
+				}
+				return FileVisitResult.CONTINUE;
+			}
+		});
+		filePaths.forEach(filePath -> files.add(filePath));
+	}
 	
 	private void getURLs (String organization, String assignment, String tag) {
 		 repoURLs = gt.getRepoURLs(organization,assignment,tag);
@@ -80,35 +109,47 @@ public class ExeGHRepos {
 			case "-p": path = getNextArg(args,i++); break;
 			case "-l": runLog = getNextArg(args,i++); break;
 			case "-t": tag = getNextArg(args,i++); break;
-			case "-dl": date = getNextArg(args,i++); break;
-			case "-exc" : excludeRepo = getNextArg(args,i++); break;
+			case "-d": date = getNextArg(args,i++); break;
+			case "-x" : excludeRepo = getNextArg(args,i++); break;
 			case "-i": incremental = true; break;
 			case "-gd": gradleDebug = true; break;
-			case "-d": debug = true; break;
-			case "-noRestore": noRestore = true; break;
+			case "-D": debug = true; break;
+			case "-nR": noRestore = true; break;
 			case "-f": force = true; break;
 			case "-L": list = true; break;
-			case "-noClone": noClone = true; break;
+			case "-nC": noClone = true; break;
+			default : {
+						printArgsError("Unexpected argument: "+args[i]+". Expected valid switch",args);
+						printUsage();
+						System.exit(1);
+					  }
 			}
 		}
 		if ("".equals(path)) path = System.getProperty("user.dir");
-		System.out.println("path = "+ path);
 	}
 	
-	private void processDelete(String deleteRE) {
-		if (!"".equals(deleteRE)) {
-			if (deleteList == null) 
-				deleteList = new ArrayList<>();
-			deleteList.add(deleteRE);
+	private void processDelete(ArrayList<String> deleteArray) {
+		for (String deleteRE : deleteArray) {
+			if (!"".equals(deleteRE)) {
+				if (deleteList == null) 
+					deleteList = new ArrayList<>();
+				deleteList.add(deleteRE);
+			}
 		}
 	}
 	
-	private void processCopy(String copyRE) {
-		if (!"".equals(copyRE)) {
-			if (copyList == null) 
-				copyList = new ArrayList<>();
-			copyList.add(copyRE);
+	private void processCopy(ArrayList<String> copyArray) {
+		if ("".equals(copyArray.get(0))) {
+			System.out.println("-I- COPY command in .CONFIG, but no file specified to copy. Skipping.");
+			return;
 		}
+		if (copyList == null) 
+			copyList = new ArrayList<>();
+		if (copyArray.size() > 1)
+			copyList.add(new FileCopyInfo(copyArray.get(0),copyArray.get(1)));
+		else
+			copyList.add(new FileCopyInfo(copyArray.get(0),""));
+			
 	}
 	
 	private void processTest(String test) {
@@ -123,14 +164,14 @@ public class ExeGHRepos {
 		}
 	}
 
-	private void processPostCommands(String[] tokens) {
+	private void processPostCommands(ArrayList<String> values) {
 		String command = "";
-		int i = 1;
+		int i = 0;
 		do {
-			command += tokens[i];
+			command += values.get(i);
 			i++;
-			if (i < tokens.length) command += ":";
-		} while (i < tokens.length);
+			if (i < values.size()) command += ":";
+		} while (i < values.size());
 		if (postCommands == null)
 			postCommands = new ArrayList<>();
 		postCommands.add(command);
@@ -156,19 +197,21 @@ public class ExeGHRepos {
 	
 		
 	private void processConfigOptions(String[] tokens) {
-		String option = tokens[0];
-		String value = null;
-		if (tokens.length >= 2) value = tokens[1];
-		switch (option) {
-		case "ORG": org = value; return;
-		case "ASSIGNMENT": assignment = value; return;
-		case "DELETE": processDelete(value); return;
-		case "COPY": processCopy(value); return;
-		case "POSTCMD": processPostCommands(tokens); return;
-		case "TEST": processTest(value); return;
-		default:updateCurrTestOption(option, value); return;
+		ArrayList<String> values = new ArrayList<String>(Arrays.asList(tokens));
+		String option = values.remove(0);		
+		if (values.isEmpty()) {
+			System.out.println("-I- Option "+option+" not initialized correctly in .CONFIG file. Skipping");
+			return;
 		}
-
+		switch (option) {
+		case "ORG": org = values.get(0); return;
+		case "ASSIGNMENT": assignment = values.get(0); return;
+		case "DELETE": processDelete(new ArrayList<String>(values)); return;
+		case "COPY": processCopy(new ArrayList<String>(values)); return;
+		case "POSTCMD": processPostCommands(values); return;
+		case "TEST": processTest(values.get(0)); return;
+		default:updateCurrTestOption(option, values.get(0)); return;
+		}
 	}
 	
 	private void updateRunLog() {
@@ -274,116 +317,269 @@ public class ExeGHRepos {
 	}
 
 	private boolean isFailingClone(String repo) {
+		if (!testResults.containsKey(repo)) return false;
 		HashMap<String,String> repoTestResults = testResults.get(repo);
 		for (ExeTest test : testList) {
 			if (!repoTestResults.get(test.getTestName()).equals("PASSED")) return true;
 		}
 		return false;
 	}
-	
-	private String getRemoteHeadSHA(String url) {
-		StringBuffer SHA = new StringBuffer();
-		ProcessBuilder pb = new ProcessBuilder("git","ls-remote",url,"HEAD");
-		InputStreamReader isr;
-		int c;
-		try {
-			Process gitRemoteSHA = pb.start();
-			isr = new InputStreamReader(gitRemoteSHA.getInputStream());
-			while ((c=isr.read())>0) {
-				SHA.append((char) c);
-			}
-			isr.close();
 
-		} catch (Exception e) {
-			System.out.println("Exception when trying to get the SHA of the remote HEAD");
-			e.printStackTrace();
-		}
-		return SHA.toString().replaceAll("\\s+HEAD", "");
+	private String getRemoteHeadSHA(String url) {
+		String[] cmd = {"git","ls-remote",url,"HEAD"};
+		String SHA = null;
+		ProcessResults results = executeProcess(cmd,null,false,0);
+		if (results.getStatus() == 0)
+			SHA = results.getOutput().get(0).replaceAll("\\s+HEAD", "");
+		return SHA;
 	}
 	 
-	private String getLocalHeadSHA(String repoPath) {
-		StringBuffer SHA = new StringBuffer();
-		ProcessBuilder pb = new ProcessBuilder("git","rev-parse","HEAD");
-		pb.directory(new File(repoPath));
-		InputStreamReader isr;
-		int c;
-		try {
-			Process gitRemoteSHA = pb.start();
-			isr = new InputStreamReader(gitRemoteSHA.getInputStream());
-			while ((c=isr.read())>0) {
-				SHA.append((char) c);
-			}
-			isr.close();
-
-		} catch (Exception e) {
-			System.out.println("Exception when trying to get the SHA of the local HEAD");
-			e.printStackTrace();
-		}
-		return SHA.toString().replaceAll("\\s+HEAD", "");
+	private String getLocalHeadSHA() {
+		String[] cmd = {"git","rev-parse","HEAD"};
+		String SHA = null;
+		ProcessResults results = executeProcess(cmd,new File(repoPath),false,0);
+		if (results.getStatus() == 0)
+			SHA = results.getOutput().get(0).replaceAll("\\s+HEAD", "");
+		return SHA;
 	}
 	
-	private boolean repoRequiresCloning(String url, String repo) {
-		String remoteSHA = getRemoteHeadSHA(url);
-		System.out.println("Remote SHA = "+remoteSHA);
-		String repoPath = path +"/"+repo;
-		String localSHA = getLocalHeadSHA(repoPath);
-		System.out.println("Local SHA = "+localSHA);
-		return true;
+	private String getSHAbyDate() {
+		String[] cmd = {"git","log","-1","--until=\'"+date+"\'","--format=format:%H"};
+		String SHA = null;
+		ProcessResults results = executeProcess(cmd,new File(repoPath),false,0);
+		if (results.getStatus() == 0)
+			SHA = results.getOutput().get(0).replaceAll("\\s+.*", "");
+		return SHA;
 	}
 	
-	private void deleteRepo(File file) {
+	private boolean deleteDir(File file) {
+		boolean status = true;
 		File[] list = file.listFiles();
 		if (list != null) {
 			for (File subFile : list) {
-				deleteRepo(subFile);
+				status = status && deleteDir(subFile);
 			}
 		}
-		boolean status = file.delete();
-		if (!status)
+		if (!file.delete()) {
 			System.out.println("Could not delete: "+file.getPath());
+			status = false;
+		}
+		return status;
 	}
 	
+	private ArrayList<String> extractProcessOutput(BufferedReader br) throws Exception {
+		String line;
+		ArrayList<String> output = new ArrayList<>();
+		while ((line = br.readLine())!=null) {
+			output.add(line);
+		}
+		return output;
+	}
 	 
+	private ProcessResults executeProcess(String[] cmd, File directory, boolean errorSrc, int timeout) {
+		BufferedReader br;
+		ProcessResults procResults = new ProcessResults();
+		ProcessBuilder pb = new ProcessBuilder(cmd);
+		if (directory != null) pb.directory(directory);
+		//if (timeout > 0) {}
+		try {
+			Process proc = pb.start();
+			if (errorSrc)
+				br = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
+			else
+				br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+			procResults.setOutput(extractProcessOutput(br));
+			br.close();
+			procResults.setStatus(proc.exitValue());
+		} catch (Exception e) {
+			System.out.println("Exception executing cmd");
+			procResults.setOutput(null);
+			procResults.setStatus(-1);
+		}
+		return procResults;
+	}
+	
 	private boolean cloneRepo(String url, String repo) {
-		String repoPath =  path + "/" + repo;
 		File repoDir = new File(repoPath);
 		int status=-1;
 		int attempt = 0;
-		if (repoDir.exists()) {
-			System.out.println("-I- "+repoPath + " already exists; deleting before attempting to clone");
-			deleteRepo(repoDir);
-		}
-		ProcessBuilder pb = new ProcessBuilder("git", "clone",url);
-		InputStreamReader isr;
-		int c;
-		pb.directory(new File(path));
-		try {
-			do {
-				attempt++;
-				System.out.println("-I- Executing Command: git clone "+url);
-				Process clone = pb.start();
-				isr = new InputStreamReader(clone.getErrorStream());
-				while ((c=isr.read())>=0) {
-					System.out.print((char) c);
-					System.out.flush();
-				}
-				isr.close();
-				status = clone.exitValue();
-			
-				System.out.println("Attempt "+attempt+ " to clone "+repo+" completed with status = "+status);
+		System.out.println("-I- Attemping to clone repo: "+repo);
 
-			} while (status != 0 && attempt <= 5);
-		} catch (Exception e) {
-			System.out.println("Attempt to clone failed");
-			e.printStackTrace();
+		if (repoDir.exists()) {
+			System.out.println("-I- "+repoPath + " already exists; deleting existing directory");
+			if (!deleteDir(repoDir)) return false;
 		}
+	
+		do {
+			attempt++;
+			System.out.println("-I- Executing Command: git clone "+url);
+			String[] cmd = {"git","clone",url};
+			ProcessResults results = executeProcess(cmd,new File(path),true,0);
+			results.printOutput();
+			status = results.getStatus();
+			System.out.println("Attempt "+attempt+ " to clone "+repo+" completed with status = "+status);
+
+		} while (status != 0 && attempt <= 5);
 		return (status == 0);
 	}
 	
-	private void testRepo(String url) {
+	private void resetRepoTestHistory(String repo) {
+		if (testResults.containsKey(repo))
+			for (ExeTest test : testList) {
+				testResults.get(repo).put(test.getTestName(), "-");
+			}
+	}
+	
+	private boolean repoRequiresCloning(String url, String repo) {
+		File clone = new File(repoPath);
+		if (!clone.exists()) return true;
+		if (noClone) return false;
+		if (force || !"".equals(date)) return true;
+		String remoteSHA = getRemoteHeadSHA(url);
+		String localSHA = getLocalHeadSHA();
+		if (remoteSHA.equals(localSHA)) 
+			return (incremental && isFailingClone(repo));
+		return true;
+	}
+	
+	private void checkoutByDate() {
+		localSHA = getLocalHeadSHA();
+		String SHAbyDate = getSHAbyDate();
+		checkout = false;
+		
+		if ((SHAbyDate == null) || (!localSHA.equals(SHAbyDate))) {
+			String[] cmd = {"git","checkout",SHAbyDate};
+			ProcessResults results = executeProcess(cmd,new File(repoPath),true,0);
+			results.printOutput();
+			if (results.getStatus() == 0) {
+				checkout = !noRestore;
+			}
+		}
+	}
+	
+	private void deleteFilesInList() throws Exception {
+		System.out.println("-I- Deleting specified files");
+		ArrayList<Path> deletePaths = new ArrayList<>();
+		for (String deleteFile : deleteList) {
+			if (!deleteFile.contains("*"))
+				deletePaths.add(Paths.get(repoPath+"/"+deleteFile));
+			else try {
+				getMatchingPaths(Paths.get(repoPath),deleteFile,deletePaths);
+			} catch (IOException e) {
+				System.out.println("-E- getMatchingPaths threw an exception while trying to find "+deleteFile);
+				throw new IOException();
+			}
+		}
+		
+		for (Path path : deletePaths) {
+			System.out.println("-I- Deleting "+path.toString());
+			File f = path.toFile();
+			if (f.exists()) {
+				if (f.isDirectory()) {
+					if (!deleteDir(f)) throw new Exception();
+				} else {
+					if (!f.delete()) {
+						System.out.println("-E- Attempt to delete file "+path + " failed");
+						throw new Exception();
+					}
+				}
+			}
+		}	
+	}
+
+	private boolean checkSourceFiles(String copySource, ArrayList<Path> copySourcePaths) {
+		if (!copySource.contains("*")) {
+			Path source = Paths.get(path+"/"+copySource);
+			File sf = source.toFile();
+			if (!sf.exists()) {
+				System.out.println("-E- Source file "+copySource+" does not exist in "+path);
+				return false;
+			}
+			copySourcePaths.add(Paths.get(path+"/"+copySource));
+		} else {
+			try {
+				getMatchingPaths(Paths.get(path),copySource,copySourcePaths);
+			} catch (IOException e) {
+				System.out.println("-E- getMatchingPaths threw an exception while trying to find "+ copySource);
+				return false;
+			} 
+		}
+		return true;
+	}
+	
+	private void copyDirectory(String srcLoc, String destLoc) throws IOException {
+		Files.walk(Paths.get(srcLoc))
+		.forEach(source -> {
+			Path destination = Paths.get(destLoc,source.toString().substring(srcLoc.length()));
+			try {
+				Files.copy(source, destination);
+			} catch (IOException e) {
+				System.out.println("-E- Error copying "+source.toString()+" to "+destination.toString());
+			}
+		});
+	}
+	
+	private void copyFilesInList() throws Exception {
+		System.out.println("-I- Copying specified files");
+		for (FileCopyInfo copyInfo : copyList) {
+			ArrayList<Path> copySourcePaths = new ArrayList<>();
+			if (!checkSourceFiles(copyInfo.getSource(),copySourcePaths)) {
+				throw new Exception();
+			}
+			Path destPath = Paths.get(repoPath,copyInfo.getDest());
+			File destDir = destPath.toFile();
+			if (destDir.exists() && !destDir.isDirectory()) {
+					System.out.println("-E- Destination of COPY command must a directory, but is not");
+					throw new Exception();
+			} else if (!destDir.exists()) {
+				if (!destDir.mkdir()) {
+					System.out.println("-E- Unable to create destination directory "+destDir.getName());
+					throw new Exception();
+				}
+			}
+			
+			for (Path sourcePath : copySourcePaths) {
+				File sourceFile = sourcePath.toFile();
+				if (!sourceFile.isDirectory()) {
+					Path copyPath = Paths.get(destPath.toString(),sourceFile.getName());
+					System.out.println("-I- Copying "+sourcePath.toString()+" to "+copyPath.toString());
+					try {
+						Files.copy(sourcePath, copyPath,StandardCopyOption.REPLACE_EXISTING);
+					} catch (IOException e) {
+						System.out.println("-E- Exception occurred while copying "+sourcePath.toString()+" to "+copyPath.toString());
+						throw new Exception();
+					}
+				} else {
+					System.out.println("-I- Copying "+sourcePath.toString()+" to "+destPath.toString());
+					try {
+						copyDirectory(sourcePath.toString(),destPath.toString()+"/"+sourceFile.getName());
+					} catch (IOException e) {
+						throw new Exception();
+					}
+				}
+			}	
+		}
+	}
+	
+
+	private void executeRepo(String url) {
 		String repo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
-		if (repoRequiresCloning(url,repo)) 
-			cloneRepo(url,repo);
+		repoPath = path + "/" + repo;
+		System.out.println("-I- Executing Repo: "+repo);
+		boolean status = true;
+		if (repoRequiresCloning(url,repo)) { 
+			if (!cloneRepo(url,repo)) {
+				resetRepoTestHistory(repo);
+				return;
+			}
+		}
+		if (!"".equals(date)) checkoutByDate();
+		try {
+			if (deleteList !=null) deleteFilesInList();
+			if (copyList != null)  copyFilesInList();
+		} catch (Exception e) {
+			return;
+		}
 		
 	}
 	
@@ -391,7 +587,7 @@ public class ExeGHRepos {
 		getURLs(org,assignment,tag);
 		processHistoryFile();
 		for (String url : repoURLs) {
-			testRepo(url);
+			executeRepo(url);
 		}
 		
 	}
@@ -431,6 +627,4 @@ public class ExeGHRepos {
 	public ArrayList<String> getRepoURL() {
 		return repoURLs;
 	}
-
-
 }
