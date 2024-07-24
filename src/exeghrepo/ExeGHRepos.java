@@ -1,8 +1,10 @@
 package exeghrepo;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.FileSystems;
@@ -290,11 +292,12 @@ public class ExeGHRepos {
 	
 	private void processHistoryFile() {
 		updateRunLog();
+		testResults = new HashMap<>();
 		File historyFile = new File(runLog);
 		if (historyFile.exists()) {
 			boolean header = true;
 			String line = null;
-			testResults = new HashMap<>();
+
 			try (BufferedReader br = new BufferedReader(new FileReader(historyFile))) {
 				while ((line = br.readLine())!=null) {
 					String[] tokens = line.split(",");
@@ -461,10 +464,12 @@ public class ExeGHRepos {
 	}
 	
 	private void resetRepoTestHistory(String repo) {
-		if (testResults.containsKey(repo))
-			for (ExeTest test : testList) {
-				testResults.get(repo).put(test.getTestName(), "-");
-			}
+		if (!testResults.containsKey(repo)) {
+			testResults.put(repo, new HashMap<String,String>());
+		}
+		for (ExeTest test : testList) {
+			testResults.get(repo).put(test.getTestName(), "-");
+		}
 	}
 	
 	private boolean repoRequiresCloning(String url, String repo) {
@@ -479,7 +484,7 @@ public class ExeGHRepos {
 		return true;
 	}
 	
-	private void checkoutByDate() {
+	private boolean checkoutByDate() {
 		localSHA = getLocalHeadSHA();
 		String SHAbyDate = getSHAbyDate();
 		checkout = false;
@@ -492,6 +497,7 @@ public class ExeGHRepos {
 				checkout = !noRestore;
 			}
 		}
+		return checkout;
 	}
 	
 	private void deleteFilesInList() throws Exception {
@@ -632,6 +638,120 @@ public class ExeGHRepos {
 			results = executeTimeoutProcess(runCmd, test.getTestName(), new File(repoPath),test.getTimeout());
 			results.printOutput();			
 		}
+		updateTestResultOutput(test,results);
+		if (results.getStatus()==-2) results.getOutput().add(test.getTestName()+" > Timed Out FAILED");
+		writeLogFile(test.getTestName(),results.getOutput());
+		updateTestResultsHash(test, results);
+	}
+	
+	private boolean decodeTestResults(String testName, ArrayList<String> resultsLog) {
+		boolean status = true;
+	}
+	
+	private void updateTestResultsHash(ExeTest test, ProcessResults results) {
+		
+	}
+	
+	private void writeLogFile(String testName, ArrayList<String> outputLines) {
+		File log = new File(repoPath +"/"+testName+".log");
+		try {
+			BufferedWriter bw = new BufferedWriter(new FileWriter(log));
+			for (String line : outputLines) {
+				bw.write(line);
+				bw.write("\n");
+			}
+			bw.flush();
+			bw.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private ArrayList<String> readFileIntoArrayList(File file) {
+		ArrayList<String> data = new ArrayList<String>();
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(file));
+			String line;
+			while ((line = br.readLine())!=null) {
+				data.add(line);
+			}
+			br.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return data;
+	}
+	
+	private void compareExpectAndActualOutputs(File expect, File actual, ExeTest test, ArrayList<String> output) {
+		ArrayList<String> expData = readFileIntoArrayList(expect);
+		ArrayList<String> actData = readFileIntoArrayList(actual);
+		if (expData.size() != actData.size()) {
+			output.add(test.getTestName()+" > "+test.getCmp() + " Size Check FAILED");
+			output.add("  E:   "+expData.size()+" lines, A:   "+actData.size()+" lines.");
+			return;
+		}
+		for (int i = 0; i < expData.size(); i ++) {
+			if (!expData.get(i).equals(actData.get(i))) {
+				output.add(test.getTestName()+" > "+test.getCmp() + " Mismatch FAILED");
+				output.add("   E: "+expData.get(i));
+				output.add("   A: "+actData.get(i));
+				return;
+			}
+		}
+		output.add(test.getTestName()+" > PASSED");
+	}
+	
+	private void updateTestResultOutput(ExeTest test, ProcessResults results) {
+		if ("run".equals(test.getTestMode())) {
+			if ("".equals(test.getCmp())) {
+				results.getOutput().add(test.getTestName()+" > PASSED");
+				return;
+			}
+			File expFile = new File(path + "/"+test.getCmp());
+			if (!expFile.exists()) { 
+				results.getOutput().add(test.getTestName()+" > Failed");
+				results.getOutput().add("   Expect file "+expFile.getName()+" does not exist in "+path);
+				return;					
+			}
+			File actFile = new File(repoPath + "/"+test.getCmp());
+			if (!actFile.exists()) { 
+				results.getOutput().add(test.getTestName()+" > Failed");
+				results.getOutput().add("   Test did not create output file: "+test.getCmp());
+				return;					
+			}
+			compareExpectAndActualOutputs(expFile, actFile, test, results.getOutput());
+		} 
+	}
+	
+	private void cleanUpRepo() {
+		File del = new File(repoPath+"/build.gradle");
+		if (del.exists()) {
+			if (!del.delete()) {
+			System.out.println("-I- Unable to remove file: "+del.getPath());
+			}
+		}
+		del = new File(repoPath+"/build");
+		if (!deleteDir(del)) {
+			System.out.println("-I- Unable to remove directory: "+del.getPath());
+		}
+		del = new File(repoPath+"/.gradle");
+		if (!deleteDir(del)) {
+			System.out.println("-I- Unable to remove directory: "+del.getPath());
+		}
+		if (!noRestore) {
+			File repoDir = new File(repoPath);
+			System.out.println("-I- Executing git restore on "+repoDir.getName());
+			String[] cmd = {"git","restore","."};
+			ProcessResults results = executeProcess(cmd,repoDir,false,0);
+			if (results.getStatus() != 0) {
+				System.out.println("-I- git restore failed for repo: "+repoDir.getName());
+			}
+		}
+	}
+	
+	private void executeVIM(ExeTest test) {
+		System.out.println("-I- Execute VIM not implemented yet");
+		return;
 	}
 
 	private void executeRepo(String url) {
@@ -639,28 +759,33 @@ public class ExeGHRepos {
 		repoPath = path + "/" + repo;
 		System.out.println("-I- Executing Repo: "+repo);
 		boolean status = true;
-		if (repoRequiresCloning(url,repo)) { 
-			if (!cloneRepo(url,repo)) {
+		if (repoRequiresCloning(url,repo)) {
+			status = cloneRepo(url,repo);
+			if (status && !"".equals(date)) status = checkoutByDate();
+			if (!status) {
 				resetRepoTestHistory(repo);
 				return;
 			}
 		}
-		if (!"".equals(date)) checkoutByDate();
 		try {
 			if (deleteList !=null) deleteFilesInList();
 			if (copyList != null)  copyFilesInList();
-			for (ExeTest test : testList) {
+		} catch (Exception e) {
+			return;
+		}
+		for (ExeTest test : testList) {
+			try {
 				if (!"vim".equals(test.getTestMode())) {
 					setupTest(test);
 					executeTest(test);
 				} else {
-					
+					executeVIM(test);
 				}
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
-		} catch (Exception e) {
-			return;
 		}
-		
+		cleanUpRepo();
 	}
 	
 	private void setGradleCommand() {

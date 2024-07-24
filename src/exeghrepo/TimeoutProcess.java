@@ -1,8 +1,6 @@
 package exeghrepo;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 
@@ -33,7 +31,6 @@ public class TimeoutProcess implements Runnable {
 
 	public void run() {
 		InputStreamReader isr=null;
-		BufferedWriter bw = null;
 		String output="";
 		char[] cbuf = new char[4096];
 		int bufSize;
@@ -45,7 +42,6 @@ public class TimeoutProcess implements Runnable {
 		try {
 			proc = pb.start();
 			isr = new InputStreamReader(proc.getInputStream());
-			bw = new BufferedWriter(new FileWriter(log));
 			while (proc.isAlive()) {
 				while (isr.ready()) {
 					bufSize = isr.read(cbuf,0,4096);
@@ -60,8 +56,6 @@ public class TimeoutProcess implements Runnable {
 						}
 						isr.close();
 						results.setOutput(processOutputString(output));
-						bw.write(output);
-						bw.close();
 						results.setStatus(-2);
 						return;
 					} else 
@@ -73,8 +67,6 @@ public class TimeoutProcess implements Runnable {
 				output+=new String(cbuf,0,bufSize);
 			}
 			results.setOutput(processOutputString(output));
-			bw.write(output);
-			bw.close();
 		} catch (Exception e) {
 			System.out.println("-E- Exception occured while running test");
 			e.printStackTrace();
