@@ -21,6 +21,7 @@ import java.util.HashMap;
 
 public class ExeGHRepos {
 	GitTools gt = new GitTools();
+	GradleTools gr;
 	private String org="";
 	private String assignment="";
 	private String tag = "";
@@ -46,7 +47,16 @@ public class ExeGHRepos {
 	private ExeTest currTest;
 	private HashMap<String,HashMap<String,String>> testResults;
 	private ArrayList<String> repoURLs;
-	
+	private String[] gradleCmd;
+    /**
+     * Gets the operating system.
+     *
+     * @return the operating system
+     */
+    private boolean isWindows() {
+    	return System.getProperty("os.name").contains("Win");
+    }
+
 	private void getMatchingPaths(Path srcPath, String matchPattern, ArrayList<Path> files) throws IOException {
 		final ArrayList<Path> filePaths = new ArrayList<>();
 		final PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:**/"+matchPattern);
@@ -76,7 +86,6 @@ public class ExeGHRepos {
 		System.out.println("-E-: "+message);
 	}
 	
-
 	private String getNextArg(String[] args, int i) {
 		if ((i+1) == args.length) {
 			printArgsError("Switch "+args[i]+" requires a string argument - none supplied",args);
@@ -213,6 +222,8 @@ public class ExeGHRepos {
 		default:updateCurrTestOption(option, values.get(0)); return;
 		}
 	}
+
+	
 	
 	private void updateRunLog() {
 		if ("".equals(runLog)) 
@@ -367,7 +378,7 @@ public class ExeGHRepos {
 		return status;
 	}
 	
-	private ArrayList<String> extractProcessOutput(BufferedReader br) throws Exception {
+	ArrayList<String> extractProcessOutput(BufferedReader br) throws Exception {
 		String line;
 		ArrayList<String> output = new ArrayList<>();
 		while ((line = br.readLine())!=null) {
@@ -381,13 +392,13 @@ public class ExeGHRepos {
 		ProcessResults procResults = new ProcessResults();
 		ProcessBuilder pb = new ProcessBuilder(cmd);
 		if (directory != null) pb.directory(directory);
-		//if (timeout > 0) {}
 		try {
 			Process proc = pb.start();
 			if (errorSrc)
 				br = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
 			else
 				br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+			proc.waitFor();
 			procResults.setOutput(extractProcessOutput(br));
 			br.close();
 			procResults.setStatus(proc.exitValue());
@@ -395,6 +406,32 @@ public class ExeGHRepos {
 			System.out.println("Exception executing cmd");
 			procResults.setOutput(null);
 			procResults.setStatus(-1);
+		}
+		return procResults;
+	}
+	
+	private ProcessResults executeTimeoutProcess(String[] cmd, String testName, File directory, long timeout) {
+		ProcessResults procResults = new ProcessResults();
+		TimeoutProcess timeoutProcess = new TimeoutProcess(this,cmd, testName, directory, procResults);
+		Thread thread = new Thread(timeoutProcess);
+		thread.start();
+		long endTime = System.currentTimeMillis()+timeout*1000;
+		boolean timedOut = false;
+		while (thread.isAlive()) {
+			if (System.currentTimeMillis() > endTime) {
+				timedOut = true;
+				break;
+			}
+		}
+		if (timedOut) {
+			timeoutProcess.setTerminate();
+			procResults.setStatus(-2);
+			try {
+				Thread.sleep(2000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 		return procResults;
 	}
@@ -465,6 +502,7 @@ public class ExeGHRepos {
 				deletePaths.add(Paths.get(repoPath+"/"+deleteFile));
 			else try {
 				getMatchingPaths(Paths.get(repoPath),deleteFile,deletePaths);
+				
 			} catch (IOException e) {
 				System.out.println("-E- getMatchingPaths threw an exception while trying to find "+deleteFile);
 				throw new IOException();
@@ -498,7 +536,8 @@ public class ExeGHRepos {
 			copySourcePaths.add(Paths.get(path+"/"+copySource));
 		} else {
 			try {
-				getMatchingPaths(Paths.get(path),copySource,copySourcePaths);
+				String rootDir = (new File(path)).getName();
+				getMatchingPaths(Paths.get(path),rootDir+"/"+ copySource,copySourcePaths);
 			} catch (IOException e) {
 				System.out.println("-E- getMatchingPaths threw an exception while trying to find "+ copySource);
 				return false;
@@ -561,6 +600,39 @@ public class ExeGHRepos {
 		}
 	}
 	
+	private void setupTest(ExeTest test) throws Exception {
+		gr.writeBuildGradleFile(repoPath, test.getTestMode(), test.getSourcePath(), 
+                test.getTestName(), test.getLib());
+		Path destPath = Paths.get(repoPath,"src",test.getSourcePath(),test.getTestName()+".java");
+		if (!test.isUser() && "test".equals(test.getTestMode())) {
+			Path srcPath = Paths.get(path,test.getTestName()+".java");
+			System.out.println("-I- Copy test "+test.getTestName()+" to "+destPath.toString());
+			Files.copy(srcPath, destPath, StandardCopyOption.REPLACE_EXISTING);
+		}
+		File testFile = destPath.toFile();
+		if (!testFile.exists()) {
+			System.out.println("-E- Test "+test.getTestName()+" does not exist in source directory");
+			throw new Exception();
+		}
+	}
+	
+	private void executeTest(ExeTest test) {
+		String[] cmd = {gradleCmd[0],gradleCmd[1],"gradle","clean"};
+		System.out.println("-I- Executing Gradle clean\n");
+		ProcessResults results = executeProcess(cmd,new File(repoPath),false,0);
+		results.printOutput();
+		if ("test".equals(test.getTestMode())) {
+			String[] testCmd = {gradleCmd[0],gradleCmd[1],"gradle","test","--tests",test.getTestName()};
+			System.out.println("-I- Executing Gradle test: "+test.getTestName());
+			results = executeTimeoutProcess(testCmd, test.getTestName(), new File(repoPath),test.getTimeout());
+			results.printOutput();
+		} else {
+			String[] runCmd = {gradleCmd[0],gradleCmd[1],"gradle","run"};
+			System.out.println("-I- Executing Gradle run: "+test.getTestName());
+			results = executeTimeoutProcess(runCmd, test.getTestName(), new File(repoPath),test.getTimeout());
+			results.printOutput();			
+		}
+	}
 
 	private void executeRepo(String url) {
 		String repo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
@@ -577,15 +649,39 @@ public class ExeGHRepos {
 		try {
 			if (deleteList !=null) deleteFilesInList();
 			if (copyList != null)  copyFilesInList();
+			for (ExeTest test : testList) {
+				if (!"vim".equals(test.getTestMode())) {
+					setupTest(test);
+					executeTest(test);
+				} else {
+					
+				}
+			}
 		} catch (Exception e) {
 			return;
 		}
 		
 	}
 	
+	private void setGradleCommand() {
+		if (isWindows()) 
+			gradleCmd = new String[] {"cmd","/c"};
+		else 
+			gradleCmd = new String[] {"/bin/sh","-c"};
+			
+			
+	}
+	
 	private void executeFlow() {
+		setGradleCommand();
 		getURLs(org,assignment,tag);
 		processHistoryFile();
+		try {
+			gr = new GradleTools(path);
+		} catch (Exception e) {
+			System.out.println("-E- Exception occured while reading gradle.template. Aborting");
+			System.exit(6);
+		}
 		for (String url : repoURLs) {
 			executeRepo(url);
 		}
