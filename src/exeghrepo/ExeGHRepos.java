@@ -33,6 +33,7 @@ public class ExeGHRepos {
 	private String excludeRepo = "";
 	private String localSHA = "";
 	private String repoPath = "";
+	private String currRepo = null;
 	private boolean checkout = false;
 	private boolean incremental = false;
 	private boolean gradleDebug = false;
@@ -48,6 +49,9 @@ public class ExeGHRepos {
 	private ArrayList<ExeTest> testList;
 	private ExeTest currTest;
 	private HashMap<String,HashMap<String,String>> testResults;
+	private HashMap<String,ArrayList<String>> detailTestOrderMap;
+	private HashMap<String,HashMap<String,ArrayList<String>>> detailedTestResults;
+	
 	private ArrayList<String> repoURLs;
 	private String[] gradleCmd;
     /**
@@ -103,17 +107,21 @@ public class ExeGHRepos {
 		return (nextArg);
 	}
 	
+	private void printArgsErrorAndExit(String[] args, int i) {
+		printArgsError("-I- Unexpected command line argument: "+args[i]+".\n"+
+	                   "    Expected a valid switch",args);
+		printUsage();
+		System.exit(1);
+		
+	}
+	
 	private void processArgs(String[] args) {
 		System.out.println("-I-: Command Line Arguments:");
 		System.out.println("     "+String.join(" ", args));
 		
 		for (int i = 0; i < args.length; i++) {
 			// all switches begin with a "-"; otherwise printHelp and abort
-			if (!args[i].matches("\\-.*")) {
-				printArgsError("Unexpected argument: "+args[i]+". Expected valid switch",args);
-				printUsage();
-				System.exit(1);
-			}
+			if (!args[i].matches("\\-.*")) printArgsErrorAndExit(args,i);
 			switch (args[i]) {
 			case "-o": org = getNextArg(args,i++); break;
 			case "-a": assignment = getNextArg(args,i++); break;
@@ -129,11 +137,7 @@ public class ExeGHRepos {
 			case "-f": force = true; break;
 			case "-L": list = true; break;
 			case "-nC": noClone = true; break;
-			default : {
-						printArgsError("Unexpected argument: "+args[i]+". Expected valid switch",args);
-						printUsage();
-						System.exit(1);
-					  }
+			default : printArgsErrorAndExit(args,i);
 			}
 		}
 		if ("".equals(path)) path = System.getProperty("user.dir");
@@ -201,12 +205,12 @@ public class ExeGHRepos {
 				int timeout = Integer.parseInt(value);
 				currTest.setTimeout(timeout);
 			} catch (Exception e) {
-				System.out.println("-I- Detected non-integer timeout value in config file. Using default timeout value");
+				System.out.println("-I- Non-integer timeout value ("+value+") in config file.\n"+
+			                       "    Using default timeout value");
 			}
 		}
 	}
 	
-		
 	private void processConfigOptions(String[] tokens) {
 		ArrayList<String> values = new ArrayList<String>(Arrays.asList(tokens));
 		String option = values.remove(0);		
@@ -230,14 +234,12 @@ public class ExeGHRepos {
 	private void updateRunLog() {
 		if ("".equals(runLog)) 
 			runLog = assignment+".summary.csv";
-//		if (!"".equals(path))
-				runLog = path + "/"+runLog;
+		runLog = path + "/"+runLog;
 	}
 	
 	private void readConfigFile() {
 		String cfgFilename = ".CONFIG";
-//		if (!"".equals(path)) 
-			cfgFilename = path + "/" + cfgFilename;
+		cfgFilename = path + "/" + cfgFilename;
 		File cfg = new File(cfgFilename);
 		String line = null;
 		if (cfg.exists()) {
@@ -297,7 +299,6 @@ public class ExeGHRepos {
 		if (historyFile.exists()) {
 			boolean header = true;
 			String line = null;
-
 			try (BufferedReader br = new BufferedReader(new FileReader(historyFile))) {
 				while ((line = br.readLine())!=null) {
 					String[] tokens = line.split(",");
@@ -315,8 +316,7 @@ public class ExeGHRepos {
 					header = false;
 				}
 				br.close();
-			} catch (Exception e)
-			{
+			} catch (Exception e) {
 				System.out.println("-E- Exception occured when trying to read history file: " + historyFile.getName());
 				e.printStackTrace();
 			}
@@ -342,7 +342,7 @@ public class ExeGHRepos {
 	private String getRemoteHeadSHA(String url) {
 		String[] cmd = {"git","ls-remote",url,"HEAD"};
 		String SHA = null;
-		ProcessResults results = executeProcess(cmd,null,false,0);
+		ProcessResults results = executeProcess(cmd,null,0);
 		if (results.getStatus() == 0)
 			SHA = results.getOutput().get(0).replaceAll("\\s+HEAD", "");
 		return SHA;
@@ -351,7 +351,7 @@ public class ExeGHRepos {
 	private String getLocalHeadSHA() {
 		String[] cmd = {"git","rev-parse","HEAD"};
 		String SHA = null;
-		ProcessResults results = executeProcess(cmd,new File(repoPath),false,0);
+		ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 		if (results.getStatus() == 0)
 			SHA = results.getOutput().get(0).replaceAll("\\s+HEAD", "");
 		return SHA;
@@ -360,7 +360,7 @@ public class ExeGHRepos {
 	private String getSHAbyDate() {
 		String[] cmd = {"git","log","-1","--until=\'"+date+"\'","--format=format:%H"};
 		String SHA = null;
-		ProcessResults results = executeProcess(cmd,new File(repoPath),false,0);
+		ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 		if (results.getStatus() == 0)
 			SHA = results.getOutput().get(0).replaceAll("\\s+.*", "");
 		return SHA;
@@ -390,17 +390,15 @@ public class ExeGHRepos {
 		return output;
 	}
 	 
-	private ProcessResults executeProcess(String[] cmd, File directory, boolean errorSrc, int timeout) {
+	private ProcessResults executeProcess(String[] cmd, File directory, int timeout) {
 		BufferedReader br;
 		ProcessResults procResults = new ProcessResults();
 		ProcessBuilder pb = new ProcessBuilder(cmd);
 		if (directory != null) pb.directory(directory);
+		pb.redirectErrorStream(true);
 		try {
 			Process proc = pb.start();
-			if (errorSrc)
-				br = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
-			else
-				br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+			br = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 			proc.waitFor();
 			procResults.setOutput(extractProcessOutput(br));
 			br.close();
@@ -410,6 +408,30 @@ public class ExeGHRepos {
 			procResults.setOutput(null);
 			procResults.setStatus(-1);
 		}
+		return procResults;
+	}
+	
+	private ProcessResults executeProcessPostCmd(String[] cmd, File directory) {
+		InputStreamReader isr;
+		ProcessResults procResults = new ProcessResults();
+		ProcessBuilder pb = new ProcessBuilder(cmd);
+		if (directory != null) pb.directory(directory);
+		pb.redirectErrorStream(true);
+		try {
+			Process proc = pb.start();
+			isr = new InputStreamReader(proc.getInputStream());
+			int c;
+			while ((c=isr.read())!=-1) {
+				System.out.print((char) c);
+			}
+			isr.close();
+			procResults.setStatus(proc.exitValue());
+		} catch (Exception e) {
+			System.out.println("Exception executing cmd");
+			procResults.setOutput(null);
+			procResults.setStatus(-1);
+		}
+		procResults.setOutput(null);
 		return procResults;
 	}
 	
@@ -432,7 +454,6 @@ public class ExeGHRepos {
 			try {
 				Thread.sleep(2000);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
@@ -454,7 +475,7 @@ public class ExeGHRepos {
 			attempt++;
 			System.out.println("-I- Executing Command: git clone "+url);
 			String[] cmd = {"git","clone",url};
-			ProcessResults results = executeProcess(cmd,new File(path),true,0);
+			ProcessResults results = executeProcess(cmd,new File(path),0);
 			results.printOutput();
 			status = results.getStatus();
 			System.out.println("Attempt "+attempt+ " to clone "+repo+" completed with status = "+status);
@@ -491,7 +512,7 @@ public class ExeGHRepos {
 		
 		if ((SHAbyDate == null) || (!localSHA.equals(SHAbyDate))) {
 			String[] cmd = {"git","checkout",SHAbyDate};
-			ProcessResults results = executeProcess(cmd,new File(repoPath),true,0);
+			ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 			results.printOutput();
 			if (results.getStatus() == 0) {
 				checkout = !noRestore;
@@ -563,25 +584,30 @@ public class ExeGHRepos {
 			}
 		});
 	}
+
+	private void checkCopySourceDestPaths(FileCopyInfo copyInfo, ArrayList<Path> copySourcePaths,Path destPath) 
+	             throws Exception {
+		if (!checkSourceFiles(copyInfo.getSource(),copySourcePaths)) {
+			throw new Exception();
+		}
+		File destDir = destPath.toFile();
+		if (destDir.exists() && !destDir.isDirectory()) {
+				System.out.println("-E- Destination of COPY command must a directory, but is not");
+				throw new Exception();
+		} else if (!destDir.exists()) {
+			if (!destDir.mkdir()) {
+				System.out.println("-E- Unable to create destination directory "+destDir.getName());
+				throw new Exception();
+			}
+		}		
+	}
 	
 	private void copyFilesInList() throws Exception {
 		System.out.println("-I- Copying specified files");
 		for (FileCopyInfo copyInfo : copyList) {
 			ArrayList<Path> copySourcePaths = new ArrayList<>();
-			if (!checkSourceFiles(copyInfo.getSource(),copySourcePaths)) {
-				throw new Exception();
-			}
 			Path destPath = Paths.get(repoPath,copyInfo.getDest());
-			File destDir = destPath.toFile();
-			if (destDir.exists() && !destDir.isDirectory()) {
-					System.out.println("-E- Destination of COPY command must a directory, but is not");
-					throw new Exception();
-			} else if (!destDir.exists()) {
-				if (!destDir.mkdir()) {
-					System.out.println("-E- Unable to create destination directory "+destDir.getName());
-					throw new Exception();
-				}
-			}
+			checkCopySourceDestPaths(copyInfo, copySourcePaths,destPath);
 			
 			for (Path sourcePath : copySourcePaths) {
 				File sourceFile = sourcePath.toFile();
@@ -591,7 +617,8 @@ public class ExeGHRepos {
 					try {
 						Files.copy(sourcePath, copyPath,StandardCopyOption.REPLACE_EXISTING);
 					} catch (IOException e) {
-						System.out.println("-E- Exception occurred while copying "+sourcePath.toString()+" to "+copyPath.toString());
+						System.out.println("-E- Exception occurred while copying "+sourcePath.toString()+" to "
+					                       +copyPath.toString());
 						throw new Exception();
 					}
 				} else {
@@ -625,7 +652,7 @@ public class ExeGHRepos {
 	private void executeTest(ExeTest test) {
 		String[] cmd = {gradleCmd[0],gradleCmd[1],"gradle","clean"};
 		System.out.println("-I- Executing Gradle clean\n");
-		ProcessResults results = executeProcess(cmd,new File(repoPath),false,0);
+		ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 		results.printOutput();
 		if ("test".equals(test.getTestMode())) {
 			String[] testCmd = {gradleCmd[0],gradleCmd[1],"gradle","test","--tests",test.getTestName()};
@@ -644,12 +671,44 @@ public class ExeGHRepos {
 		updateTestResultsHash(test, results);
 	}
 	
-	private boolean decodeTestResults(String testName, ArrayList<String> resultsLog) {
-		boolean status = true;
+	void recordDetailedTestResults(String testName, String subTestName, int index, String result) {
+		if (detailTestOrderMap == null) {
+			detailTestOrderMap = new HashMap<String, ArrayList<String>>();
+			detailedTestResults = new HashMap<String,HashMap<String, ArrayList<String>>>();
+		}
+		if (index == 0) {
+			if (!detailedTestResults.containsKey(currRepo)) 
+				detailedTestResults.put(currRepo, new HashMap<String, ArrayList<String>>());
+			if (!detailedTestResults.get(currRepo).containsKey(testName)) 
+				detailedTestResults.get(currRepo).put(testName,new ArrayList<String>() );
+			if (!detailTestOrderMap.containsKey(testName))
+				detailTestOrderMap.put(testName, new ArrayList<String>());
+		}
+		if (detailTestOrderMap.get(testName).size() == index) 
+			detailTestOrderMap.get(testName).add(subTestName);
+		if (detailTestOrderMap.get(testName).get(index).equals(subTestName)) {
+			detailedTestResults.get(currRepo).get(testName).add(subTestName+":"+result);
+		} else {
+			System.out.println("-E- Detected mismatch in test execution for JUnit Test "+testName);
+			System.out.println("    Expected subtest "+detailTestOrderMap.get(currRepo).get(index));
+			System.out.println("    Actual subtest "+subTestName);
+		}
+	}
+	
+	private boolean decodeTestResults(ExeTest test, ProcessResults results) {
+		String testName = test.getTestName();
+		ArrayList<String> resultsLog = results.getOutput();
+		int exeStatus = results.getStatus();
+		boolean testRun = test.getTestMode().equals("run");
+		ExeTestResults exeTestResults = new ExeTestResults(this,testRun,exeStatus);
+		return exeTestResults.processTestResults(testName,resultsLog);
 	}
 	
 	private void updateTestResultsHash(ExeTest test, ProcessResults results) {
-		
+		boolean exeResult = decodeTestResults(test,results);
+		if (!testResults.containsKey(currRepo))
+			testResults.put(currRepo, new HashMap<String,String>());
+		testResults.get(currRepo).put(test.getTestName(), (exeResult)?"PASSED":"FAILED");
 	}
 	
 	private void writeLogFile(String testName, ArrayList<String> outputLines) {
@@ -742,7 +801,7 @@ public class ExeGHRepos {
 			File repoDir = new File(repoPath);
 			System.out.println("-I- Executing git restore on "+repoDir.getName());
 			String[] cmd = {"git","restore","."};
-			ProcessResults results = executeProcess(cmd,repoDir,false,0);
+			ProcessResults results = executeProcess(cmd,repoDir,0);
 			if (results.getStatus() != 0) {
 				System.out.println("-I- git restore failed for repo: "+repoDir.getName());
 			}
@@ -755,15 +814,15 @@ public class ExeGHRepos {
 	}
 
 	private void executeRepo(String url) {
-		String repo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
-		repoPath = path + "/" + repo;
-		System.out.println("-I- Executing Repo: "+repo);
+		currRepo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
+		repoPath = path + "/" + currRepo;
+		System.out.println("-I- Executing Repo: "+currRepo);
 		boolean status = true;
-		if (repoRequiresCloning(url,repo)) {
-			status = cloneRepo(url,repo);
+		if (repoRequiresCloning(url,currRepo)) {
+			status = cloneRepo(url,currRepo);
 			if (status && !"".equals(date)) status = checkoutByDate();
 			if (!status) {
-				resetRepoTestHistory(repo);
+				resetRepoTestHistory(currRepo);
 				return;
 			}
 		}
@@ -810,7 +869,100 @@ public class ExeGHRepos {
 		for (String url : repoURLs) {
 			executeRepo(url);
 		}
-		
+		writeHistoryFile();
+		writeDetailedTestResults();
+	}
+
+	private void writeDetailedHeader(BufferedWriter bw) throws IOException {
+		bw.write("Repository");
+		for (ExeTest test : testList ) {
+			String testName = test.getTestName();
+			for (String subTestName : detailTestOrderMap.get(testName)) {
+				bw.write(","+testName+":"+subTestName);
+			}
+		}
+		bw.write("\n");		
+	}
+
+	private void writeDetailedRepoResults(BufferedWriter bw) throws IOException {
+		bw.write(currRepo);
+		boolean repoExists = detailedTestResults.containsKey(currRepo);
+		for (ExeTest test : testList ) {
+			int index = 0;
+			String testName = test.getTestName();
+			for (String subTestName : detailTestOrderMap.get(testName)) {
+				if (repoExists) {
+					if (detailedTestResults.get(currRepo).containsKey(testName)) {
+						if (detailedTestResults.get(currRepo).get(testName).get(index).matches(subTestName+":.*")) {
+							String result = detailedTestResults.get(currRepo).get(testName).get(index).replaceAll(".*:(.*)","$1");
+							bw.write(","+result);
+						} else {
+							bw.write(",-");						
+						}
+					} else {
+						bw.write(",-");
+					}
+				} else {
+					bw.write(",-");
+				}
+				index++;
+			}
+		}
+		bw.write("\n");		
+	}
+	
+	private void writeDetailedTestResults() {
+		File detailFile = new File(path+"/testResults.csv");
+		try {
+			BufferedWriter bw = new BufferedWriter(new FileWriter(detailFile));
+			writeDetailedHeader(bw);
+			for (String url : repoURLs) {
+				currRepo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
+				writeDetailedRepoResults(bw);
+			}
+			bw.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void writeHistoryFile() {
+		File logFile = new File(runLog);
+		try {
+			if (logFile.exists()) {
+				Files.move(Paths.get(runLog), Paths.get(runLog+".save"), StandardCopyOption.REPLACE_EXISTING);
+			}
+			BufferedWriter bw = new BufferedWriter(new FileWriter(logFile));
+			bw.write("Repository");
+			for (ExeTest test : testList ) {
+				bw.write(","+test.getTestName());
+			}
+			bw.write("\n");
+			for (String url : repoURLs) {
+				String repo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
+				bw.write(repo);
+				for (ExeTest test : testList ) {
+					if (testResults.containsKey(repo)) {
+						if (testResults.get(repo).containsKey(test.getTestName())) {
+							bw.write(","+testResults.get(repo).get(test.getTestName()));
+						} else bw.write(",-");
+					} else bw.write(",-");
+				}
+				bw.write("\n");
+			}
+			bw.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void executePostCommands() {
+		for (String line: postCommands) {
+			String[] command = line.split("\\s+");
+			System.out.println("-I- Executing PostCommand: "+line);
+			ProcessResults results = executeProcessPostCmd(command,new File(path));
+//			results.printOutput();
+		}
 	}
 	
 	public static void main(String[] args) {
@@ -819,11 +971,12 @@ public class ExeGHRepos {
 		jExe.processArgs(args);
 		jExe.readConfigFile();
 		jExe.executeFlow();
+		jExe.executePostCommands();
 	}
 
 	public String getOrg() {
 		return org;
-	}
+	} 
 
 	public void setOrg(String org) {
 		this.org = org;
