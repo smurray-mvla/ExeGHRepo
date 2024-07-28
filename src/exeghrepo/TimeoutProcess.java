@@ -3,6 +3,7 @@ package exeghrepo;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Map;
 
 public class TimeoutProcess implements Runnable {
 	ExeGHRepos exeTask;
@@ -35,6 +36,8 @@ public class TimeoutProcess implements Runnable {
 		char[] cbuf = new char[4096];
 		int bufSize;
 		ProcessBuilder pb = new ProcessBuilder(cmd);
+		Map<String,String> env = pb.environment();
+		if (!env.containsKey("JAVA_HOME")) env.put("JAVA_HOME",System.getProperty("java.home"));
 		pb.redirectErrorStream(true);
 		long nextCheckTime = System.currentTimeMillis()+250;
 		if (directory != null) pb.directory(directory);

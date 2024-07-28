@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Map;
 
 public class ExeGHRepos {
 	GitTools gt = new GitTools();
@@ -80,6 +81,14 @@ public class ExeGHRepos {
 	
 	private void getURLs (String organization, String assignment, String tag) {
 		 repoURLs = gt.getRepoURLs(organization,assignment,tag);
+		 if (!"".equals(excludeRepo)) {
+			 for (int i = repoURLs.size()-1; i >=0; i--) {
+				 if (repoURLs.get(i).matches("^.*"+excludeRepo+".*")) {
+					 System.out.println("-I- Excluding Repo URL: "+repoURLs.get(i));
+					 repoURLs.remove(i);
+				 }
+			 }
+		 }
 		 repoURLs.sort(Comparator.naturalOrder());
 		 if (list) printURLs();
 	}
@@ -179,17 +188,17 @@ public class ExeGHRepos {
 		}
 	}
 
-	private void processPostCommands(ArrayList<String> values) {
-		String command = "";
-		int i = 0;
-		do {
-			command += values.get(i);
-			i++;
-			if (i < values.size()) command += ":";
-		} while (i < values.size());
+	private void processPostCommands(String command) {
+		String[] tokens = command.split("\\s+");
+		for (int i = 0; i < tokens.length; i++) {
+			if (tokens[i].matches("^~.*")) {
+				tokens[i] = Paths.get(System.getProperty("user.home"),tokens[i].replaceAll("^~[^A-Za-z]*","")).toString();
+			}
+		}
+
 		if (postCommands == null)
 			postCommands = new ArrayList<>();
-		postCommands.add(command);
+		postCommands.add(String.join(" ", tokens));
 	}
 
 	private void updateCurrTestOption(String option, String value) {
@@ -215,7 +224,8 @@ public class ExeGHRepos {
 		ArrayList<String> values = new ArrayList<String>(Arrays.asList(tokens));
 		String option = values.remove(0);		
 		if (values.isEmpty()) {
-			System.out.println("-I- Option "+option+" not initialized correctly in .CONFIG file. Skipping");
+			if ((option.equals("ORG") || option.equals("TEST") || option.equals("ASSIGNMENT")) ) 
+				System.out.println("-I- Option "+option+" not initialized correctly in .CONFIG file. Skipping");
 			return;
 		}
 		switch (option) {
@@ -223,7 +233,7 @@ public class ExeGHRepos {
 		case "ASSIGNMENT": assignment = values.get(0); return;
 		case "DELETE": processDelete(new ArrayList<String>(values)); return;
 		case "COPY": processCopy(new ArrayList<String>(values)); return;
-		case "POSTCMD": processPostCommands(values); return;
+		case "POSTCMD": processPostCommands(values.get(0)); return;
 		case "TEST": processTest(values.get(0)); return;
 		default:updateCurrTestOption(option, values.get(0)); return;
 		}
@@ -415,6 +425,8 @@ public class ExeGHRepos {
 		InputStreamReader isr;
 		ProcessResults procResults = new ProcessResults();
 		ProcessBuilder pb = new ProcessBuilder(cmd);
+		Map<String,String> env = pb.environment();
+		if (!env.containsKey("JAVA_HOME")) env.put("JAVA_HOME",System.getProperty("java.home"));
 		if (directory != null) pb.directory(directory);
 		pb.redirectErrorStream(true);
 		try {
@@ -650,17 +662,17 @@ public class ExeGHRepos {
 	}
 	
 	private void executeTest(ExeTest test) {
-		String[] cmd = {gradleCmd[0],gradleCmd[1],"gradle","clean"};
+		String[] cmd = {gradleCmd[0],gradleCmd[1],gradleCmd[2]+" clean"};
 		System.out.println("-I- Executing Gradle clean\n");
 		ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 		results.printOutput();
 		if ("test".equals(test.getTestMode())) {
-			String[] testCmd = {gradleCmd[0],gradleCmd[1],"gradle","test","--tests",test.getTestName()};
+			String[] testCmd = {gradleCmd[0],gradleCmd[1],gradleCmd[2]+" test --tests "+ test.getTestName()};
 			System.out.println("-I- Executing Gradle test: "+test.getTestName());
 			results = executeTimeoutProcess(testCmd, test.getTestName(), new File(repoPath),test.getTimeout());
 			results.printOutput();
 		} else {
-			String[] runCmd = {gradleCmd[0],gradleCmd[1],"gradle","run"};
+			String[] runCmd = {gradleCmd[0],gradleCmd[1],gradleCmd[2]+" run"};
 			System.out.println("-I- Executing Gradle run: "+test.getTestName());
 			results = executeTimeoutProcess(runCmd, test.getTestName(), new File(repoPath),test.getTimeout());
 			results.printOutput();			
@@ -766,7 +778,7 @@ public class ExeGHRepos {
 				results.getOutput().add(test.getTestName()+" > PASSED");
 				return;
 			}
-			File expFile = new File(path + "/"+test.getCmp());
+			File expFile = new File(path + "/"+test.getCmp().replaceAll(".*/", ""));
 			if (!expFile.exists()) { 
 				results.getOutput().add(test.getTestName()+" > Failed");
 				results.getOutput().add("   Expect file "+expFile.getName()+" does not exist in "+path);
@@ -849,11 +861,9 @@ public class ExeGHRepos {
 	
 	private void setGradleCommand() {
 		if (isWindows()) 
-			gradleCmd = new String[] {"cmd","/c"};
+			gradleCmd = new String[] {"cmd","/c","gradle"};
 		else 
-			gradleCmd = new String[] {"/bin/sh","-c"};
-			
-			
+			gradleCmd = new String[] {"/bin/sh","-c",System.getProperty("user.home")+"/gradle"};
 	}
 	
 	private void executeFlow() {
@@ -878,7 +888,8 @@ public class ExeGHRepos {
 		for (ExeTest test : testList ) {
 			String testName = test.getTestName();
 			for (String subTestName : detailTestOrderMap.get(testName)) {
-				bw.write(","+testName+":"+subTestName);
+				bw.write(","+testName);
+				if (!testName.equals(subTestName)) bw.write(":"+subTestName);
 			}
 		}
 		bw.write("\n");		
@@ -888,13 +899,14 @@ public class ExeGHRepos {
 		bw.write(currRepo);
 		boolean repoExists = detailedTestResults.containsKey(currRepo);
 		for (ExeTest test : testList ) {
-			int index = 0;
 			String testName = test.getTestName();
 			for (String subTestName : detailTestOrderMap.get(testName)) {
+				int index = 0;
 				if (repoExists) {
 					if (detailedTestResults.get(currRepo).containsKey(testName)) {
 						if (detailedTestResults.get(currRepo).get(testName).get(index).matches(subTestName+":.*")) {
-							String result = detailedTestResults.get(currRepo).get(testName).get(index).replaceAll(".*:(.*)","$1");
+							String result = detailedTestResults.get(currRepo).get(testName).get(index)
+									                           .replaceAll(".*:(.*)","$1");
 							bw.write(","+result);
 						} else {
 							bw.write(",-");						
@@ -907,6 +919,7 @@ public class ExeGHRepos {
 				}
 				index++;
 			}
+
 		}
 		bw.write("\n");		
 	}
@@ -957,11 +970,11 @@ public class ExeGHRepos {
 	}
 	
 	private void executePostCommands() {
+		if (postCommands == null) return;
 		for (String line: postCommands) {
 			String[] command = line.split("\\s+");
 			System.out.println("-I- Executing PostCommand: "+line);
 			ProcessResults results = executeProcessPostCmd(command,new File(path));
-//			results.printOutput();
 		}
 	}
 	
