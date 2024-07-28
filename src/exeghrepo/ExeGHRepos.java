@@ -433,13 +433,20 @@ public class ExeGHRepos {
 			Process proc = pb.start();
 			isr = new InputStreamReader(proc.getInputStream());
 			int c;
+			while (proc.isAlive()) {
+				if ((c=isr.read())!=-1) {
+					System.out.print((char) c);				
+				}
+			}
 			while ((c=isr.read())!=-1) {
 				System.out.print((char) c);
 			}
+			
 			isr.close();
 			procResults.setStatus(proc.exitValue());
 		} catch (Exception e) {
 			System.out.println("Exception executing cmd");
+			e.printStackTrace();
 			procResults.setOutput(null);
 			procResults.setStatus(-1);
 		}
