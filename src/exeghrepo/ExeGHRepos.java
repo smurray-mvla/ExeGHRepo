@@ -863,7 +863,7 @@ public class ExeGHRepos {
 		if (isWindows()) 
 			gradleCmd = new String[] {"cmd","/c","gradle"};
 		else 
-			gradleCmd = new String[] {"/bin/sh","-c",System.getProperty("user.home")+"/gradle"};
+			gradleCmd = new String[] {"/bin/sh","-c",System.getProperty("user.home")+"/bin/gradle"};
 	}
 	
 	private void executeFlow() {
