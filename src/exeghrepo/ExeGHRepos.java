@@ -958,8 +958,7 @@ public class ExeGHRepos {
 				bw.write(","+test.getTestName());
 			}
 			bw.write("\n");
-			for (String url : repoURLs) {
-				String repo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
+			for (String repo : testResults.keySet()) {
 				bw.write(repo);
 				for (ExeTest test : testList ) {
 					if (testResults.containsKey(repo)) {
