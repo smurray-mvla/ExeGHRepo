@@ -48,6 +48,7 @@ public class ExeTestResults {
 		else if (passedTest == 0) System.out.println("-E- There were no tests run --> failing");
 		else if (timedOut) System.out.println("-E- Gradle Execution Timed Out");
 		
-		return (passedTest>0) && compJava && (!testRun && compJunit && exeTest) && (failedTest==0) && !timedOut; 		
+		return (passedTest>0) && compJava && (testRun || (!testRun && compJunit && exeTest)) && (failedTest==0) 
+				&& !timedOut; 		
 	}
 }

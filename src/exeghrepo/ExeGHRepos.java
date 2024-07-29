@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeSet;
 
 public class ExeGHRepos {
 	GitTools gt = new GitTools();
@@ -958,7 +959,8 @@ public class ExeGHRepos {
 				bw.write(","+test.getTestName());
 			}
 			bw.write("\n");
-			for (String repo : testResults.keySet()) {
+			
+			for (String repo : new TreeSet<String>(testResults.keySet())) {
 				bw.write(repo);
 				for (ExeTest test : testList ) {
 					if (testResults.containsKey(repo)) {
