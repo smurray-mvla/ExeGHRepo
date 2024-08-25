@@ -5,16 +5,45 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Map;
 
+// TODO: Auto-generated Javadoc
+/**
+ * The Class TimeoutProcess.
+ */
 public class TimeoutProcess implements Runnable {
+	
+	/** The exe task. */
 	ExeGHRepos exeTask;
+	
+	/** The cmd. */
 	String[] cmd;
+	
+	/** The test name. */
 	String testName;
+	
+	/** The directory. */
 	File directory;
+	
+	/** The path. */
 	String path;
+	
+	/** The terminate. */
 	boolean terminate = false;
+	
+	/** The results. */
 	ProcessResults results;
+	
+	/** The log. */
 	File log;
 	
+	/**
+	 * Instantiates a new timeout process.
+	 *
+	 * @param exeTask the exe task
+	 * @param cmd the cmd
+	 * @param testName the test name
+	 * @param directory the directory
+	 * @param results the results
+	 */
 	public TimeoutProcess(ExeGHRepos exeTask, String[] cmd, String testName, File directory, ProcessResults results) {
 		this.exeTask = exeTask;
 		this.cmd = cmd;
@@ -26,10 +55,16 @@ public class TimeoutProcess implements Runnable {
 		if (log.exists()) log.delete();
 	}
 	
+	/**
+	 * Sets the terminate.
+	 */
 	public void setTerminate() {
 		terminate = true;
 	}
 
+	/**
+	 * Run.
+	 */
 	public void run() {
 		InputStreamReader isr=null;
 		String output="";
@@ -79,6 +114,12 @@ public class TimeoutProcess implements Runnable {
 		results.setStatus(proc.exitValue());
 	}
 	
+	/**
+	 * Process output string.
+	 *
+	 * @param output the output
+	 * @return the array list
+	 */
 	private ArrayList<String> processOutputString(String output) {
 		ArrayList<String> aryOutput = new ArrayList<>();
 		String[] lines = output.split("\\R");

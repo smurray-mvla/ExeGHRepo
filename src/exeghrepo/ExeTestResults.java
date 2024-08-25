@@ -2,24 +2,62 @@ package exeghrepo;
 
 import java.util.ArrayList;
 
+// TODO: Auto-generated Javadoc
+/**
+ * The Class ExeTestResults.
+ */
 public class ExeTestResults {
+	
+	/** The exe GH repo. */
 	ExeGHRepos exeGHRepo;
+	
+	/** The exe status. */
 	int exeStatus;
+	
+	/** The test run. */
 	boolean testRun;
+	
+	/** The comp java. */
 	boolean compJava = false;
+	
+	/** The comp junit. */
 	boolean compJunit = false;
+	
+	/** The exe test. */
 	boolean exeTest = false;
+	
+	/** The passed test. */
 	int passedTest = 0;
+	
+	/** The failed test. */
 	int failedTest = 0;
+	
+	/** The timed out. */
 	boolean timedOut = false;
+	
+	/** The sub test name. */
 	String subTestName = "";
 	
+	/**
+	 * Instantiates a new exe test results.
+	 *
+	 * @param exeGHRepo the exe GH repo
+	 * @param testRun the test run
+	 * @param exeStatus the exe status
+	 */
 	public ExeTestResults(ExeGHRepos exeGHRepo, boolean testRun, int exeStatus) {
 		this.exeGHRepo = exeGHRepo;
 		this.exeStatus = exeStatus;
 		this.testRun = testRun;
 	}
 	
+	/**
+	 * Process test results.
+	 *
+	 * @param testName the test name
+	 * @param resultsLog the results log
+	 * @return true, if successful
+	 */
 	boolean processTestResults(String testName, ArrayList<String> resultsLog) {
 		boolean grader =  testName.contains("Grader");
 		for (String line: resultsLog) {

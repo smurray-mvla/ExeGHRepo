@@ -9,14 +9,27 @@ import org.kohsuke.github.GitHub;
 import org.kohsuke.github.GitHubBuilder;
 import org.kohsuke.github.PagedIterable;
 
+// TODO: Auto-generated Javadoc
+/**
+ * The Class GitTools.
+ */
 public class GitTools {
+	
+	/** The gh. */
 	GitHub gh = null;
+	
+	/** The gh org. */
 	GHOrganization ghOrg = null;
 	
-	public GitTools() {
+	/**
+	 * Instantiates a new git tools.
+	 *
+	 * @param org the org
+	 */
+	public GitTools(String org) {
 		try {
 			gh = new GitHubBuilder().fromPropertyFile().build();
-			ghOrg = gh.getOrganization("ADEN-LAHS");
+			ghOrg = gh.getOrganization(org);
 		} catch (IOException e) {
 			System.out.println("something bad happened");
 			e.printStackTrace();
@@ -24,6 +37,14 @@ public class GitTools {
 	}
 	
 	
+	/**
+	 * Gets the repo URLs.
+	 *
+	 * @param organization the organization
+	 * @param assignment the assignment
+	 * @param tag the tag
+	 * @return the repo UR ls
+	 */
 	ArrayList<String> getRepoURLs(String organization,String assignment, String tag) {
 		ArrayList<String> urlList = new ArrayList<>();
 		String match = organization + "/" + assignment;

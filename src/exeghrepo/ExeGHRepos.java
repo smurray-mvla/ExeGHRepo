@@ -23,38 +23,106 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeSet;
 
+// TODO: Auto-generated Javadoc
+/**
+ * The Class ExeGHRepos.
+ */
 public class ExeGHRepos {
-	GitTools gt = new GitTools();
+	
+	/** The gt. */
+	GitTools gt = null;
+	
+	/** The gr. */
 	GradleTools gr;
+	
+	/** The org. */
 	private String org="";
+	
+	/** The assignment. */
 	private String assignment="";
+	
+	/** The tag. */
 	private String tag = "";
+	
+	/** The run log. */
 	private String runLog = "";
+	
+	/** The date. */
 	private String date = "";
+	
+	/** The path. */
 	private String path = "";
+	
+	/** The exclude repo. */
 	private String excludeRepo = "";
+	
+	/** The local SHA. */
 	private String localSHA = "";
+	
+	/** The repo path. */
 	private String repoPath = "";
+	
+	/** The curr repo. */
 	private String currRepo = null;
+	
+	private String branch = "";
+	private String currBranch = "";
+	
+	/** The checkout. */
 	private boolean checkout = false;
+	
+	/** The incremental. */
 	private boolean incremental = false;
+	
+	/** The gradle debug. */
 	private boolean gradleDebug = false;
+	
+	/** The debug. */
 	private boolean debug = false;
+	
+	/** The no restore. */
 	private boolean noRestore = false;
+	
+	/** The force. */
 	private boolean force = false;
+	
+	/** The list. */
 	private boolean list = false;
+	
+	/** The no clone. */
 	private boolean noClone = false;
+	
+	/** The test index. */
 	private int testIndex = -1;
+	
+	/** The delete list. */
 	private ArrayList<String> deleteList;
+	
+	/** The copy list. */
 	private ArrayList<FileCopyInfo> copyList;
+	
+	/** The post commands. */
 	private ArrayList<String> postCommands;
+	
+	/** The test list. */
 	private ArrayList<ExeTest> testList;
+	
+	/** The curr test. */
 	private ExeTest currTest;
+	
+	/** The test results. */
 	private HashMap<String,HashMap<String,String>> testResults;
+	
+	/** The detail test order map. */
 	private HashMap<String,ArrayList<String>> detailTestOrderMap;
+	
+	/** The detailed test results. */
 	private HashMap<String,HashMap<String,ArrayList<String>>> detailedTestResults;
 	
+	/** The repo UR ls. */
 	private ArrayList<String> repoURLs;
+	
+	/** The gradle cmd. */
 	private String[] gradleCmd;
     /**
      * Gets the operating system.
@@ -65,6 +133,15 @@ public class ExeGHRepos {
     	return System.getProperty("os.name").contains("Win");
     }
 
+	/**
+	 * Gets the matching paths.
+	 *
+	 * @param srcPath the src path
+	 * @param matchPattern the match pattern
+	 * @param files the files
+	 * @return the matching paths
+	 * @throws IOException Signals that an I/O exception has occurred.
+	 */
 	private void getMatchingPaths(Path srcPath, String matchPattern, ArrayList<Path> files) throws IOException {
 		final ArrayList<Path> filePaths = new ArrayList<>();
 		final PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:**/"+matchPattern);
@@ -80,28 +157,53 @@ public class ExeGHRepos {
 		filePaths.forEach(filePath -> files.add(filePath));
 	}
 	
+	/**
+	 * Gets the UR ls.
+	 *
+	 * @param organization the organization
+	 * @param assignment the assignment
+	 * @param tag the tag
+	 * @return the UR ls
+	 */
 	private void getURLs (String organization, String assignment, String tag) {
-		 repoURLs = gt.getRepoURLs(organization,assignment,tag);
-		 if (!"".equals(excludeRepo)) {
-			 for (int i = repoURLs.size()-1; i >=0; i--) {
-				 if (repoURLs.get(i).matches("^.*"+excludeRepo+".*")) {
-					 System.out.println("-I- Excluding Repo URL: "+repoURLs.get(i));
-					 repoURLs.remove(i);
-				 }
-			 }
-		 }
-		 repoURLs.sort(Comparator.naturalOrder());
-		 if (list) printURLs();
+		gt = new GitTools(organization);
+		repoURLs = gt.getRepoURLs(organization,assignment,tag);
+		if (!"".equals(excludeRepo)) {
+			for (int i = repoURLs.size()-1; i >=0; i--) {
+				if (repoURLs.get(i).matches("^.*"+excludeRepo+".*")) {
+					System.out.println("-I- Excluding Repo URL: "+repoURLs.get(i));
+					repoURLs.remove(i);
+				}
+			}
+		}
+		repoURLs.sort(Comparator.naturalOrder());
+		if (list) printURLs();
 	}
 	
+	/**
+	 * Prints the usage.
+	 */
 	private void printUsage() {
 		System.out.println("Usage message needs to be added here!!!");
 	}
 	
+	/**
+	 * Prints the args error.
+	 *
+	 * @param message the message
+	 * @param args the args
+	 */
 	private void printArgsError(String message,String[] args) {
 		System.out.println("-E-: "+message);
 	}
 	
+	/**
+	 * Gets the next arg.
+	 *
+	 * @param args the args
+	 * @param i the i
+	 * @return the next arg
+	 */
 	private String getNextArg(String[] args, int i) {
 		if ((i+1) == args.length) {
 			printArgsError("Switch "+args[i]+" requires a string argument - none supplied",args);
@@ -117,6 +219,12 @@ public class ExeGHRepos {
 		return (nextArg);
 	}
 	
+	/**
+	 * Prints the args error and exit.
+	 *
+	 * @param args the args
+	 * @param i the i
+	 */
 	private void printArgsErrorAndExit(String[] args, int i) {
 		printArgsError("-I- Unexpected command line argument: "+args[i]+".\n"+
 	                   "    Expected a valid switch",args);
@@ -125,6 +233,11 @@ public class ExeGHRepos {
 		
 	}
 	
+	/**
+	 * Process args.
+	 *
+	 * @param args the args
+	 */
 	private void processArgs(String[] args) {
 		System.out.println("-I-: Command Line Arguments:");
 		System.out.println("     "+String.join(" ", args));
@@ -139,6 +252,7 @@ public class ExeGHRepos {
 			case "-l": runLog = getNextArg(args,i++); break;
 			case "-t": tag = getNextArg(args,i++); break;
 			case "-d": date = getNextArg(args,i++); break;
+			case "-b": branch = getNextArg(args,i++); break;
 			case "-x" : excludeRepo = getNextArg(args,i++); break;
 			case "-i": incremental = true; break;
 			case "-gd": gradleDebug = true; break;
@@ -153,6 +267,11 @@ public class ExeGHRepos {
 		if ("".equals(path)) path = System.getProperty("user.dir");
 	}
 	
+	/**
+	 * Process delete.
+	 *
+	 * @param deleteArray the delete array
+	 */
 	private void processDelete(ArrayList<String> deleteArray) {
 		for (String deleteRE : deleteArray) {
 			if (!"".equals(deleteRE)) {
@@ -163,6 +282,11 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Process copy.
+	 *
+	 * @param copyArray the copy array
+	 */
 	private void processCopy(ArrayList<String> copyArray) {
 		if ("".equals(copyArray.get(0))) {
 			System.out.println("-I- COPY command in .CONFIG, but no file specified to copy. Skipping.");
@@ -177,6 +301,11 @@ public class ExeGHRepos {
 			
 	}
 	
+	/**
+	 * Process test.
+	 *
+	 * @param test the test
+	 */
 	private void processTest(String test) {
 		if (!"".equals(test)) {
 			if (testList == null) 
@@ -189,6 +318,11 @@ public class ExeGHRepos {
 		}
 	}
 
+	/**
+	 * Process post commands.
+	 *
+	 * @param command the command
+	 */
 	private void processPostCommands(String command) {
 		String[] tokens = command.split("\\s+");
 		for (int i = 0; i < tokens.length; i++) {
@@ -202,6 +336,12 @@ public class ExeGHRepos {
 		postCommands.add(String.join(" ", tokens));
 	}
 
+	/**
+	 * Update curr test option.
+	 *
+	 * @param option the option
+	 * @param value the value
+	 */
 	private void updateCurrTestOption(String option, String value) {
 		if (value == null) return;
 		if ("EXE".equals(option)) currTest.setTestMode(value);
@@ -221,6 +361,11 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Process config options.
+	 *
+	 * @param tokens the tokens
+	 */
 	private void processConfigOptions(String[] tokens) {
 		ArrayList<String> values = new ArrayList<String>(Arrays.asList(tokens));
 		String option = values.remove(0);		
@@ -242,12 +387,18 @@ public class ExeGHRepos {
 
 	
 	
+	/**
+	 * Update run log.
+	 */
 	private void updateRunLog() {
 		if ("".equals(runLog)) 
 			runLog = assignment+".summary.csv";
 		runLog = path + "/"+runLog;
 	}
 	
+	/**
+	 * Read config file.
+	 */
 	private void readConfigFile() {
 		String cfgFilename = ".CONFIG";
 		cfgFilename = path + "/" + cfgFilename;
@@ -273,6 +424,12 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Consistent header.
+	 *
+	 * @param tokens the tokens
+	 * @return true, if successful
+	 */
 	private boolean consistentHeader(String[] tokens) {
 		if (tokens.length - 1 != testList.size())
 			return false;
@@ -284,6 +441,9 @@ public class ExeGHRepos {
 		return true;
 	}
 	
+	/**
+	 * Prints the test results.
+	 */
 	private void printTestResults() {
 		ArrayList<String> repoList = new ArrayList<>();
 		System.out.print("Repository");
@@ -303,6 +463,9 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Process history file.
+	 */
 	private void processHistoryFile() {
 		updateRunLog();
 		testResults = new HashMap<>();
@@ -335,12 +498,21 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Prints the UR ls.
+	 */
 	private void printURLs() {
 		for (String url : repoURLs) {
 			System.out.println(url);
 		}
 	}
 
+	/**
+	 * Checks if is failing clone.
+	 *
+	 * @param repo the repo
+	 * @return true, if is failing clone
+	 */
 	private boolean isFailingClone(String repo) {
 		if (!testResults.containsKey(repo)) return false;
 		HashMap<String,String> repoTestResults = testResults.get(repo);
@@ -350,6 +522,12 @@ public class ExeGHRepos {
 		return false;
 	}
 
+	/**
+	 * Gets the remote head SHA.
+	 *
+	 * @param url the url
+	 * @return the remote head SHA
+	 */
 	private String getRemoteHeadSHA(String url) {
 		String[] cmd = {"git","ls-remote",url,"HEAD"};
 		String SHA = null;
@@ -359,6 +537,11 @@ public class ExeGHRepos {
 		return SHA;
 	}
 	 
+	/**
+	 * Gets the local head SHA.
+	 *
+	 * @return the local head SHA
+	 */
 	private String getLocalHeadSHA() {
 		String[] cmd = {"git","rev-parse","HEAD"};
 		String SHA = null;
@@ -368,6 +551,11 @@ public class ExeGHRepos {
 		return SHA;
 	}
 	
+	/**
+	 * Gets the SH aby date.
+	 *
+	 * @return the SH aby date
+	 */
 	private String getSHAbyDate() {
 		String[] cmd = {"git","log","-1","--until=\'"+date+"\'","--format=format:%H"};
 		String SHA = null;
@@ -377,6 +565,12 @@ public class ExeGHRepos {
 		return SHA;
 	}
 	
+	/**
+	 * Delete dir.
+	 *
+	 * @param file the file
+	 * @return true, if successful
+	 */
 	private boolean deleteDir(File file) {
 		boolean status = true;
 		File[] list = file.listFiles();
@@ -392,6 +586,13 @@ public class ExeGHRepos {
 		return status;
 	}
 	
+	/**
+	 * Extract process output.
+	 *
+	 * @param br the br
+	 * @return the array list
+	 * @throws Exception the exception
+	 */
 	ArrayList<String> extractProcessOutput(BufferedReader br) throws Exception {
 		String line;
 		ArrayList<String> output = new ArrayList<>();
@@ -401,6 +602,14 @@ public class ExeGHRepos {
 		return output;
 	}
 	 
+	/**
+	 * Execute process.
+	 *
+	 * @param cmd the cmd
+	 * @param directory the directory
+	 * @param timeout the timeout
+	 * @return the process results
+	 */
 	private ProcessResults executeProcess(String[] cmd, File directory, int timeout) {
 		BufferedReader br;
 		ProcessResults procResults = new ProcessResults();
@@ -422,6 +631,13 @@ public class ExeGHRepos {
 		return procResults;
 	}
 	
+	/**
+	 * Execute process post cmd.
+	 *
+	 * @param cmd the cmd
+	 * @param directory the directory
+	 * @return the process results
+	 */
 	private ProcessResults executeProcessPostCmd(String[] cmd, File directory) {
 		InputStreamReader isr;
 		ProcessResults procResults = new ProcessResults();
@@ -455,6 +671,15 @@ public class ExeGHRepos {
 		return procResults;
 	}
 	
+	/**
+	 * Execute timeout process.
+	 *
+	 * @param cmd the cmd
+	 * @param testName the test name
+	 * @param directory the directory
+	 * @param timeout the timeout
+	 * @return the process results
+	 */
 	private ProcessResults executeTimeoutProcess(String[] cmd, String testName, File directory, long timeout) {
 		ProcessResults procResults = new ProcessResults();
 		TimeoutProcess timeoutProcess = new TimeoutProcess(this,cmd, testName, directory, procResults);
@@ -480,6 +705,13 @@ public class ExeGHRepos {
 		return procResults;
 	}
 	
+	/**
+	 * Clone repo.
+	 *
+	 * @param url the url
+	 * @param repo the repo
+	 * @return true, if successful
+	 */
 	private boolean cloneRepo(String url, String repo) {
 		File repoDir = new File(repoPath);
 		int status=-1;
@@ -504,6 +736,11 @@ public class ExeGHRepos {
 		return (status == 0);
 	}
 	
+	/**
+	 * Reset repo test history.
+	 *
+	 * @param repo the repo
+	 */
 	private void resetRepoTestHistory(String repo) {
 		if (!testResults.containsKey(repo)) {
 			testResults.put(repo, new HashMap<String,String>());
@@ -513,6 +750,13 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Repo requires cloning.
+	 *
+	 * @param url the url
+	 * @param repo the repo
+	 * @return true, if successful
+	 */
 	private boolean repoRequiresCloning(String url, String repo) {
 		File clone = new File(repoPath);
 		if (!clone.exists()) return true;
@@ -525,6 +769,11 @@ public class ExeGHRepos {
 		return true;
 	}
 	
+	/**
+	 * Checkout by date.
+	 *
+	 * @return true, if successful
+	 */
 	private boolean checkoutByDate() {
 		localSHA = getLocalHeadSHA();
 		String SHAbyDate = getSHAbyDate();
@@ -541,6 +790,11 @@ public class ExeGHRepos {
 		return checkout;
 	}
 	
+	/**
+	 * Delete files in list.
+	 *
+	 * @throws Exception the exception
+	 */
 	private void deleteFilesInList() throws Exception {
 		System.out.println("-I- Deleting specified files");
 		ArrayList<Path> deletePaths = new ArrayList<>();
@@ -572,6 +826,13 @@ public class ExeGHRepos {
 		}	
 	}
 
+	/**
+	 * Check source files.
+	 *
+	 * @param copySource the copy source
+	 * @param copySourcePaths the copy source paths
+	 * @return true, if successful
+	 */
 	private boolean checkSourceFiles(String copySource, ArrayList<Path> copySourcePaths) {
 		if (!copySource.contains("*")) {
 			Path source = Paths.get(path+"/"+copySource);
@@ -593,6 +854,13 @@ public class ExeGHRepos {
 		return true;
 	}
 	
+	/**
+	 * Copy directory.
+	 *
+	 * @param srcLoc the src loc
+	 * @param destLoc the dest loc
+	 * @throws IOException Signals that an I/O exception has occurred.
+	 */
 	private void copyDirectory(String srcLoc, String destLoc) throws IOException {
 		Files.walk(Paths.get(srcLoc))
 		.forEach(source -> {
@@ -605,6 +873,14 @@ public class ExeGHRepos {
 		});
 	}
 
+	/**
+	 * Check copy source dest paths.
+	 *
+	 * @param copyInfo the copy info
+	 * @param copySourcePaths the copy source paths
+	 * @param destPath the dest path
+	 * @throws Exception the exception
+	 */
 	private void checkCopySourceDestPaths(FileCopyInfo copyInfo, ArrayList<Path> copySourcePaths,Path destPath) 
 	             throws Exception {
 		if (!checkSourceFiles(copyInfo.getSource(),copySourcePaths)) {
@@ -622,6 +898,11 @@ public class ExeGHRepos {
 		}		
 	}
 	
+	/**
+	 * Copy files in list.
+	 *
+	 * @throws Exception the exception
+	 */
 	private void copyFilesInList() throws Exception {
 		System.out.println("-I- Copying specified files");
 		for (FileCopyInfo copyInfo : copyList) {
@@ -653,6 +934,12 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Sets the up test.
+	 *
+	 * @param test the new up test
+	 * @throws Exception the exception
+	 */
 	private void setupTest(ExeTest test) throws Exception {
 		gr.writeBuildGradleFile(repoPath, test.getTestMode(), test.getSourcePath(), 
                 test.getTestName(), test.getLib());
@@ -669,6 +956,11 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Execute test.
+	 *
+	 * @param test the test
+	 */
 	private void executeTest(ExeTest test) {
 		String[] cmd = {gradleCmd[0],gradleCmd[1],gradleCmd[2]+" clean"};
 		System.out.println("-I- Executing Gradle clean\n");
@@ -691,6 +983,14 @@ public class ExeGHRepos {
 		updateTestResultsHash(test, results);
 	}
 	
+	/**
+	 * Record detailed test results.
+	 *
+	 * @param testName the test name
+	 * @param subTestName the sub test name
+	 * @param index the index
+	 * @param result the result
+	 */
 	void recordDetailedTestResults(String testName, String subTestName, int index, String result) {
 		if (detailTestOrderMap == null) {
 			detailTestOrderMap = new HashMap<String, ArrayList<String>>();
@@ -715,6 +1015,13 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Decode test results.
+	 *
+	 * @param test the test
+	 * @param results the results
+	 * @return true, if successful
+	 */
 	private boolean decodeTestResults(ExeTest test, ProcessResults results) {
 		String testName = test.getTestName();
 		ArrayList<String> resultsLog = results.getOutput();
@@ -724,6 +1031,12 @@ public class ExeGHRepos {
 		return exeTestResults.processTestResults(testName,resultsLog);
 	}
 	
+	/**
+	 * Update test results hash.
+	 *
+	 * @param test the test
+	 * @param results the results
+	 */
 	private void updateTestResultsHash(ExeTest test, ProcessResults results) {
 		boolean exeResult = decodeTestResults(test,results);
 		if (!testResults.containsKey(currRepo))
@@ -731,6 +1044,12 @@ public class ExeGHRepos {
 		testResults.get(currRepo).put(test.getTestName(), (exeResult)?"PASSED":"FAILED");
 	}
 	
+	/**
+	 * Write log file.
+	 *
+	 * @param testName the test name
+	 * @param outputLines the output lines
+	 */
 	private void writeLogFile(String testName, ArrayList<String> outputLines) {
 		File log = new File(repoPath +"/"+testName+".log");
 		try {
@@ -746,6 +1065,12 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Read file into array list.
+	 *
+	 * @param file the file
+	 * @return the array list
+	 */
 	private ArrayList<String> readFileIntoArrayList(File file) {
 		ArrayList<String> data = new ArrayList<String>();
 		try {
@@ -761,6 +1086,14 @@ public class ExeGHRepos {
 		return data;
 	}
 	
+	/**
+	 * Compare expect and actual outputs.
+	 *
+	 * @param expect the expect
+	 * @param actual the actual
+	 * @param test the test
+	 * @param output the output
+	 */
 	private void compareExpectAndActualOutputs(File expect, File actual, ExeTest test, ArrayList<String> output) {
 		ArrayList<String> expData = readFileIntoArrayList(expect);
 		ArrayList<String> actData = readFileIntoArrayList(actual);
@@ -780,6 +1113,12 @@ public class ExeGHRepos {
 		output.add(test.getTestName()+" > PASSED");
 	}
 	
+	/**
+	 * Update test result output.
+	 *
+	 * @param test the test
+	 * @param results the results
+	 */
 	private void updateTestResultOutput(ExeTest test, ProcessResults results) {
 		if ("run".equals(test.getTestMode())) {
 			if ("".equals(test.getCmp())) {
@@ -802,6 +1141,9 @@ public class ExeGHRepos {
 		} 
 	}
 	
+	/**
+	 * Clean up repo.
+	 */
 	private void cleanUpRepo() {
 		File del = new File(repoPath+"/build.gradle");
 		if (del.exists()) {
@@ -828,24 +1170,51 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Execute VIM.
+	 *
+	 * @param test the test
+	 */
 	private void executeVIM(ExeTest test) {
 		System.out.println("-I- Execute VIM not implemented yet");
 		return;
 	}
+	
+	private ArrayList<String> getBranchList() {
+		String[] cmd = {"git","branch"};
+		ProcessResults results = executeProcess(cmd,new File(repoPath),0);
+		return results.getOutput();
+	}
+	
+	private boolean switchToBranch() {
+		ArrayList<String> branches = getBranchList();
+		return true;
+	}
+	
+	private boolean processRepo(String url,String repo) {
+		boolean status = true;
+		if (repoRequiresCloning(url,currRepo)) {
+			status = cloneRepo(url,repo);
+			if (!status) {
+				resetRepoTestHistory(repo);
+				return status;
+			}
+		}
+		if (!"".equals(branch)) status = switchToBranch();
+		if (status && !"".equals(date)) status = checkoutByDate();
+		return status;
+	}
 
+	/**
+	 * Execute repo.
+	 *
+	 * @param url the url
+	 */
 	private void executeRepo(String url) {
 		currRepo = url.replaceAll(".git$", "").replaceAll("^.*\\/", "");
 		repoPath = path + "/" + currRepo;
 		System.out.println("-I- Executing Repo: "+currRepo);
-		boolean status = true;
-		if (repoRequiresCloning(url,currRepo)) {
-			status = cloneRepo(url,currRepo);
-			if (status && !"".equals(date)) status = checkoutByDate();
-			if (!status) {
-				resetRepoTestHistory(currRepo);
-				return;
-			}
-		}
+		if (!processRepo(url,currRepo)) return;
 		try {
 			if (deleteList !=null) deleteFilesInList();
 			if (copyList != null)  copyFilesInList();
@@ -867,6 +1236,9 @@ public class ExeGHRepos {
 		cleanUpRepo();
 	}
 	
+	/**
+	 * Sets the gradle command.
+	 */
 	private void setGradleCommand() {
 		if (isWindows()) 
 			gradleCmd = new String[] {"cmd","/c","gradle"};
@@ -874,6 +1246,9 @@ public class ExeGHRepos {
 			gradleCmd = new String[] {"/bin/sh","-c",System.getProperty("user.home")+"/bin/gradle"};
 	}
 	
+	/**
+	 * Execute flow.
+	 */
 	private void executeFlow() {
 		setGradleCommand();
 		getURLs(org,assignment,tag);
@@ -891,6 +1266,12 @@ public class ExeGHRepos {
 		writeDetailedTestResults();
 	}
 
+	/**
+	 * Write detailed header.
+	 *
+	 * @param bw the bw
+	 * @throws IOException Signals that an I/O exception has occurred.
+	 */
 	private void writeDetailedHeader(BufferedWriter bw) throws IOException {
 		bw.write("Repository");
 		for (ExeTest test : testList ) {
@@ -903,6 +1284,12 @@ public class ExeGHRepos {
 		bw.write("\n");		
 	}
 
+	/**
+	 * Write detailed repo results.
+	 *
+	 * @param bw the bw
+	 * @throws IOException Signals that an I/O exception has occurred.
+	 */
 	private void writeDetailedRepoResults(BufferedWriter bw) throws IOException {
 		bw.write(currRepo);
 		boolean repoExists = detailedTestResults.containsKey(currRepo);
@@ -932,6 +1319,9 @@ public class ExeGHRepos {
 		bw.write("\n");		
 	}
 	
+	/**
+	 * Write detailed test results.
+	 */
 	private void writeDetailedTestResults() {
 		File detailFile = new File(path+"/testResults.csv");
 		try {
@@ -947,6 +1337,9 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Write history file.
+	 */
 	private void writeHistoryFile() {
 		File logFile = new File(runLog);
 		try {
@@ -977,6 +1370,9 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * Execute post commands.
+	 */
 	private void executePostCommands() {
 		if (postCommands == null) return;
 		for (String line: postCommands) {
@@ -986,6 +1382,11 @@ public class ExeGHRepos {
 		}
 	}
 	
+	/**
+	 * The main method.
+	 *
+	 * @param args the arguments
+	 */
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		ExeGHRepos jExe = new ExeGHRepos();
@@ -995,30 +1396,65 @@ public class ExeGHRepos {
 		jExe.executePostCommands();
 	}
 
+	/**
+	 * Gets the org.
+	 *
+	 * @return the org
+	 */
 	public String getOrg() {
 		return org;
 	} 
 
+	/**
+	 * Sets the org.
+	 *
+	 * @param org the new org
+	 */
 	public void setOrg(String org) {
 		this.org = org;
 	}
 
+	/**
+	 * Gets the assignment.
+	 *
+	 * @return the assignment
+	 */
 	public String getAssignment() {
 		return assignment;
 	}
 
+	/**
+	 * Sets the assignment.
+	 *
+	 * @param assignment the new assignment
+	 */
 	public void setAssignment(String assignment) {
 		this.assignment = assignment;
 	}
 
+	/**
+	 * Gets the tag.
+	 *
+	 * @return the tag
+	 */
 	public String getTag() {
 		return tag;
 	}
 
+	/**
+	 * Sets the tag.
+	 *
+	 * @param tag the new tag
+	 */
 	public void setTag(String tag) {
 		this.tag = tag;
 	}
 
+	/**
+	 * Gets the repo URL.
+	 *
+	 * @return the repo URL
+	 */
 	public ArrayList<String> getRepoURL() {
 		return repoURLs;
 	}

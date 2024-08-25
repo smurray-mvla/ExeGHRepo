@@ -10,14 +10,32 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 
+// TODO: Auto-generated Javadoc
+/**
+ * The Class GradleTools.
+ */
 public class GradleTools {
 	
+	/** The template. */
 	private ArrayList<String> template = null;
 	
+	/**
+	 * Instantiates a new gradle tools.
+	 *
+	 * @param path the path
+	 * @throws Exception the exception
+	 */
 	public GradleTools(String path) throws Exception {
 		template = readGradleTemplate(path);
 	}
 	
+	/**
+	 * Read gradle template.
+	 *
+	 * @param path the path
+	 * @return the array list
+	 * @throws Exception the exception
+	 */
 	private ArrayList<String> readGradleTemplate(String path) throws Exception {
 		Path gradleTemplatePath = Paths.get(path,"gradle.template");
 		File templateFile = gradleTemplatePath.toFile();
@@ -39,6 +57,16 @@ public class GradleTools {
 		return template;
 	}
 	
+	/**
+	 * Write build gradle file.
+	 *
+	 * @param path the path
+	 * @param command the command
+	 * @param testSrcDir the test src dir
+	 * @param testName the test name
+	 * @param testLib the test lib
+	 * @throws Exception the exception
+	 */
 	public void writeBuildGradleFile(String path,String command, String testSrcDir, String testName, String testLib)
 				throws Exception {
 		Path buildGradlePath = Paths.get(path,"build.gradle");
@@ -55,10 +83,12 @@ public class GradleTools {
 						bw.write(editLine+"\n");
 					}
 				} else if (line.contains("IMP_FILES")) {
-					editLine = "\timplementation files(\'"+testLib+"\')";
-					bw.write(editLine+"\n");
-					editLine = "\ttestImplementation files(\'"+testLib+"\')";
-					bw.write(editLine+"\n");					
+					if (!"".equals(testLib)) {
+						editLine = "\timplementation files(\'"+testLib+"\')";
+						bw.write(editLine+"\n");
+						editLine = "\ttestImplementation files(\'"+testLib+"\')";
+						bw.write(editLine+"\n");	
+					}
 				} else if (line.contains("SRC_DIR")) {
 					editLine = line.replaceAll("SRC_DIR", "src/"+testSrcDir);
 					bw.write(editLine+"\n");
