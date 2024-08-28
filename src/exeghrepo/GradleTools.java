@@ -89,8 +89,13 @@ public class GradleTools {
 						editLine = "\ttestImplementation files(\'"+testLib+"\')";
 						bw.write(editLine+"\n");	
 					}
+					
 				} else if (line.contains("SRC_DIR")) {
-					editLine = line.replaceAll("SRC_DIR", "src/"+testSrcDir);
+					if (!"".equals(testSrcDir)) {
+						editLine = line.replaceAll("SRC_DIR", "src/"+testSrcDir+"\",\"src");
+					} else {
+						editLine = line.replaceAll("SRC_DIR", "src");
+					}
 					bw.write(editLine+"\n");
 				} else 
 					bw.write(line+"\n");

@@ -59,20 +59,21 @@ public class ExeTestResults {
 	 * @return true, if successful
 	 */
 	boolean processTestResults(String testName, ArrayList<String> resultsLog) {
-		boolean grader =  testName.contains("Grader");
+		boolean isGrader =  testName.contains("Grader");
+		boolean isTest = testName.endsWith("Test");
 		for (String line: resultsLog) {
 			if (line.matches("^.*> Task\\s+:compileJava\\s*$")) compJava = true;
 			if (line.matches("^.*> Task\\s+:compileTestJava\\s*$")) compJunit = true;
 			if (line.matches("^.*> Task\\s+:test\\s*$")) exeTest = true;
 			if ((line.matches("^.*"+testName+" > (\\S*)\\s?.*PASSED.*$") ||
-				 (grader && line.matches("^.*Test.*PASSED.*")))) {
-				subTestName = (!grader) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
+				 (isGrader && line.matches("^.*Test.*PASSED.*")))) {
+				subTestName = (!isGrader && isTest) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
 				exeGHRepo.recordDetailedTestResults(testName,subTestName,passedTest+failedTest,"PASSED");
 				passedTest++;			}
 			if (line.matches("^.*"+testName+" > .*Timed Out FAILED.*$")) timedOut = true;
 			else if ((line.matches("^.*"+testName+" > (\\S*)\\s?.*FAILED.*$") ||
-					 (grader && line.matches("^.*Test.*FAILED.*")))) {
-				subTestName = (!grader) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
+					 (isGrader && line.matches("^.*Test.*FAILED.*")))) {
+				subTestName = (!isGrader) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
 				exeGHRepo.recordDetailedTestResults(testName,subTestName,passedTest+failedTest,"FAILED");
 				failedTest++;
 			}

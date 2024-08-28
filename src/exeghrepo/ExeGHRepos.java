@@ -1181,14 +1181,34 @@ public class ExeGHRepos {
 	}
 	
 	private ArrayList<String> getBranchList() {
-		String[] cmd = {"git","branch"};
+		String[] cmd = {"git","branch","-a"};
 		ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 		return results.getOutput();
 	}
 	
 	private boolean switchToBranch() {
 		ArrayList<String> branches = getBranchList();
-		return true;
+		boolean found = false;
+		for (String br : branches) {
+			if (branch.equals(br.replaceAll("^.*/",""))) {
+				found = true;
+				break;
+			}
+		}
+		if (found) {
+			String[] cmd = {"git","switch",branch};
+			ProcessResults results = executeProcess(cmd,new File(repoPath),0);
+			if (results.getStatus() != 0) {
+				System.out.println("-E- Unable to switch to branch "+branch+". Skipping");
+				return false;
+			} else {
+				results.printOutput();
+			}
+		} else {
+			System.out.println("-E- Branch "+branch+" not found in remote repo. Skipping");
+		}
+		return found;
+		
 	}
 	
 	private boolean processRepo(String url,String repo) {
@@ -1295,8 +1315,9 @@ public class ExeGHRepos {
 		boolean repoExists = detailedTestResults.containsKey(currRepo);
 		for (ExeTest test : testList ) {
 			String testName = test.getTestName();
+			int index = 0;
 			for (String subTestName : detailTestOrderMap.get(testName)) {
-				int index = 0;
+
 				if (repoExists) {
 					if (detailedTestResults.get(currRepo).containsKey(testName)) {
 						if (detailedTestResults.get(currRepo).get(testName).get(index).matches(subTestName+":.*")) {
