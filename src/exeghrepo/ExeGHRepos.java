@@ -779,12 +779,16 @@ public class ExeGHRepos {
 		String SHAbyDate = getSHAbyDate();
 		checkout = false;
 		
-		if ((SHAbyDate == null) || (!localSHA.equals(SHAbyDate))) {
+		if ((SHAbyDate == null) || localSHA.equals(SHAbyDate)) {
+			System.out.println("-I- getSHAbyDate returned null or localSHA");
+			System.out.println("    using local SHA");
+			return true;
+		} else {
 			String[] cmd = {"git","checkout",SHAbyDate};
 			ProcessResults results = executeProcess(cmd,new File(repoPath),0);
 			results.printOutput();
 			if (results.getStatus() == 0) {
-				checkout = !noRestore;
+				checkout = true;
 			}
 		}
 		return checkout;
@@ -1010,7 +1014,7 @@ public class ExeGHRepos {
 			detailedTestResults.get(currRepo).get(testName).add(subTestName+":"+result);
 		} else {
 			System.out.println("-E- Detected mismatch in test execution for JUnit Test "+testName);
-			System.out.println("    Expected subtest "+detailTestOrderMap.get(currRepo).get(index));
+			System.out.println("    Expected subtest "+detailTestOrderMap.get(testName).get(index));
 			System.out.println("    Actual subtest "+subTestName);
 		}
 	}
@@ -1345,6 +1349,13 @@ public class ExeGHRepos {
 	 */
 	private void writeDetailedTestResults() {
 		File detailFile = new File(path+"/testResults.csv");
+		if (detailTestOrderMap == null) {
+			System.out.println("-I- No tests were run. Deleting testResults.csv");
+			if (detailFile.exists()) {
+				detailFile.delete();
+			}
+			return;
+		}
 		try {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(detailFile));
 			writeDetailedHeader(bw);

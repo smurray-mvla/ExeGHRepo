@@ -74,8 +74,12 @@ public class ExeTestResults {
 			else if ((line.matches("^.*"+testName+" > (\\S*)\\s?.*FAILED.*$") ||
 					 (isGrader && line.matches("^.*Test.*FAILED.*")))) {
 				subTestName = (!isGrader) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
-				exeGHRepo.recordDetailedTestResults(testName,subTestName,passedTest+failedTest,"FAILED");
-				failedTest++;
+				if (!subTestName.startsWith("test"))
+					System.out.println("-I- Non-test related failure: "+line);
+				else { 
+					exeGHRepo.recordDetailedTestResults(testName,subTestName,passedTest+failedTest,"FAILED");
+					failedTest++;
+				}
 			}
 		}
 		
