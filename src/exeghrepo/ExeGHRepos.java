@@ -370,17 +370,21 @@ public class ExeGHRepos {
 		ArrayList<String> values = new ArrayList<String>(Arrays.asList(tokens));
 		String option = values.remove(0);		
 		if (values.isEmpty()) {
-			if ((option.equals("ORG") || option.equals("TEST") || option.equals("ASSIGNMENT")) ) 
+			if ((option.equals("ORG") || option.equals("TEST") || option.equals("ASSIGNMENT")) ) {
 				System.out.println("-I- Option "+option+" not initialized correctly in .CONFIG file. Skipping");
-			return;
+				return;
+			} else {
+				values.add("");
+			}
 		}
 		switch (option) {
 		case "ORG": org = values.get(0); return;
 		case "ASSIGNMENT": assignment = values.get(0); return;
-		case "DELETE": processDelete(new ArrayList<String>(values)); return;
-		case "COPY": processCopy(new ArrayList<String>(values)); return;
-		case "POSTCMD": processPostCommands(values.get(0)); return;
+		case "DELETE": if (!values.isEmpty()) processDelete(new ArrayList<String>(values)); return;
+		case "COPY": if (!values.isEmpty()) processCopy(new ArrayList<String>(values)); return;
+		case "POSTCMD": if (!values.isEmpty()) processPostCommands(values.get(0)); return;
 		case "TEST": processTest(values.get(0)); return;
+//		case "USER": updateCurrTestOption(option,""); return;
 		default:updateCurrTestOption(option, values.get(0)); return;
 		}
 	}
@@ -1150,11 +1154,18 @@ public class ExeGHRepos {
 	 */
 	private void cleanUpRepo() {
 		File del = new File(repoPath+"/build.gradle");
-		if (del.exists()) {
-			if (!del.delete()) {
-			System.out.println("-I- Unable to remove file: "+del.getPath());
-			}
+		try {
+			Files.move(Paths.get(repoPath+"/build.gradle"), Paths.get(repoPath+"/build.gradle"+".save"), StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
+
+//		if (del.exists()) {
+//			if (!del.delete()) {
+//			System.out.println("-I- Unable to remove file: "+del.getPath());
+//			}
+//		}
 		del = new File(repoPath+"/build");
 		if (!deleteDir(del)) {
 			System.out.println("-I- Unable to remove directory: "+del.getPath());
@@ -1316,6 +1327,7 @@ public class ExeGHRepos {
 	 */
 	private void writeDetailedRepoResults(BufferedWriter bw) throws IOException {
 		bw.write(currRepo);
+		System.out.println("-I- Writing Current Repo: "+currRepo);
 		boolean repoExists = detailedTestResults.containsKey(currRepo);
 		for (ExeTest test : testList ) {
 			String testName = test.getTestName();

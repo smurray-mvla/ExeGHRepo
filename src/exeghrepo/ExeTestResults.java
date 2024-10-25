@@ -77,6 +77,7 @@ public class ExeTestResults {
 				if (!subTestName.startsWith("test"))
 					System.out.println("-I- Non-test related failure: "+line);
 				else { 
+					System.out.println("-F- "+line);
 					exeGHRepo.recordDetailedTestResults(testName,subTestName,passedTest+failedTest,"FAILED");
 					failedTest++;
 				}
