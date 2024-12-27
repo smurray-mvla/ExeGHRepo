@@ -350,9 +350,10 @@ public class ExeGHRepos {
 		else if ("SRC".equals(option)) currTest.setSourcePath(value);
 		else if ("LIB".equals(option)) currTest.setLib(value);
 		else if ("CMP".equals(option)) currTest.setCmp(value);
+		else if ("ARGS".equals(option)) currTest.setArgs(value);
 		else if ("TIMEOUT".equals(option)) {
 			try {
-				int timeout = Integer.parseInt(value);
+				int timeout = Integer.parseInt(value.trim());
 				currTest.setTimeout(timeout);
 			} catch (Exception e) {
 				System.out.println("-I- Non-integer timeout value ("+value+") in config file.\n"+
@@ -980,7 +981,10 @@ public class ExeGHRepos {
 			results = executeTimeoutProcess(testCmd, test.getTestName(), new File(repoPath),test.getTimeout());
 			results.printOutput();
 		} else {
-			String[] runCmd = {gradleCmd[0],gradleCmd[1],gradleCmd[2]+" run"};
+			String gradleRun = " run";
+			if (!"".equals(test.getArgs())) 
+				gradleRun += " --args=\""+test.getArgs()+"\"";
+			String[] runCmd = {gradleCmd[0],gradleCmd[1],gradleCmd[2]+gradleRun};
 			System.out.println("-I- Executing Gradle run: "+test.getTestName());
 			results = executeTimeoutProcess(runCmd, test.getTestName(), new File(repoPath),test.getTimeout());
 			results.printOutput();			
@@ -1191,7 +1195,8 @@ public class ExeGHRepos {
 	 * @param test the test
 	 */
 	private void executeVIM(ExeTest test) {
-		System.out.println("-I- Execute VIM not implemented yet");
+		String[] cmd = {"gvim",test.getVim()};
+		executeProcess(cmd,new File(repoPath+"/"+test.getSourcePath()),0);
 		return;
 	}
 	
@@ -1331,29 +1336,45 @@ public class ExeGHRepos {
 		boolean repoExists = detailedTestResults.containsKey(currRepo);
 		for (ExeTest test : testList ) {
 			String testName = test.getTestName();
-			int index = 0;
-			for (String subTestName : detailTestOrderMap.get(testName)) {
-
+			String subTestName;
+			String[] results = new String[detailTestOrderMap.get(testName).size()];
+			boolean testExecuted = false;
+			for (int i = 0; i <detailTestOrderMap.get(testName).size(); i++) {
+				subTestName = detailTestOrderMap.get(testName).get(i);
 				if (repoExists) {
 					if (detailedTestResults.get(currRepo).containsKey(testName)) {
-						if (detailedTestResults.get(currRepo).get(testName).get(index).matches(subTestName+":.*")) {
-							String result = detailedTestResults.get(currRepo).get(testName).get(index)
-									                           .replaceAll(".*:(.*)","$1");
-							bw.write(","+result);
+						ArrayList<String> subTestResults = detailedTestResults.get(currRepo).get(testName);
+						int index = getIndexOfSubTestName(subTestName,subTestResults);
+						if (index >= 0) {
+							results[i] = subTestResults.get(index).replaceAll(".*:(.*)","$1");
+							testExecuted = true;
+						} else if (testExecuted) {
+							// must have timed out
+							results[i] = "TimeOut";
+							testExecuted = false;
 						} else {
-							bw.write(",-");						
+							results[i] = "-";
 						}
-					} else {
-						bw.write(",-");
 					}
 				} else {
-					bw.write(",-");
+					results[i] = "-";
 				}
-				index++;
 			}
-
+			for (String result : results) {
+				bw.write(","+result);
+			}
 		}
 		bw.write("\n");		
+	}
+	
+	private int getIndexOfSubTestName(String testName, ArrayList<String> results) {
+		int index =  -1;
+		for (int i = 0; i<results.size(); i++) {
+			if (results.get(i).startsWith(testName)) {
+				return i;
+			}
+		}
+		return index;
 	}
 	
 	/**

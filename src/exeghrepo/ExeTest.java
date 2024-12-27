@@ -30,6 +30,9 @@ public class ExeTest {
 	/** The timeout. */
 	int    timeout;
 	
+	/**  command line arguments - if test mode is run. */
+	String args;
+	
 	/**
 	 * Instantiates a new exe test.
 	 *
@@ -42,6 +45,7 @@ public class ExeTest {
 		lib = "";
 		cmp = "";
 		vim = "";
+		args = "";
 		user = false;
 		timeout = 20;
 	}
@@ -179,6 +183,24 @@ public class ExeTest {
 	 */
 	public String getTestName() {
 		return testName;
+	}
+
+	/**
+	 * Gets the args.
+	 *
+	 * @return the args
+	 */
+	public String getArgs() {
+		return args;
+	}
+
+	/**
+	 * Sets the args.
+	 *
+	 * @param args the new args
+	 */
+	public void setArgs(String args) {
+		this.args = args;
 	}
 	
 	
