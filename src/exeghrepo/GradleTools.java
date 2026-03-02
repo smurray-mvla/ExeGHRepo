@@ -15,10 +15,10 @@ import java.util.ArrayList;
  * The Class GradleTools.
  */
 public class GradleTools {
-	
+
 	/** The template. */
 	private ArrayList<String> template = null;
-	
+
 	/**
 	 * Instantiates a new gradle tools.
 	 *
@@ -28,7 +28,7 @@ public class GradleTools {
 	public GradleTools(String path) throws Exception {
 		template = readGradleTemplate(path);
 	}
-	
+
 	/**
 	 * Read gradle template.
 	 *
@@ -37,7 +37,7 @@ public class GradleTools {
 	 * @throws Exception the exception
 	 */
 	private ArrayList<String> readGradleTemplate(String path) throws Exception {
-		Path gradleTemplatePath = Paths.get(path,"gradle.template");
+		Path gradleTemplatePath = Paths.get(path, "gradle.template");
 		File templateFile = gradleTemplatePath.toFile();
 		String line;
 		if (templateFile.exists()) {
@@ -48,7 +48,8 @@ public class GradleTools {
 					template.add(line);
 				}
 				br.close();
-				if (template.isEmpty()) template = null;
+				if (template.isEmpty())
+					template = null;
 			} catch (IOException e) {
 				System.out.println("-E- Fatal Error while attempting to read gradle.template");
 				throw new Exception();
@@ -56,20 +57,20 @@ public class GradleTools {
 		}
 		return template;
 	}
-	
+
 	/**
 	 * Write build gradle file.
 	 *
-	 * @param path the path
-	 * @param command the command
+	 * @param path       the path
+	 * @param command    the command
 	 * @param testSrcDir the test src dir
-	 * @param testName the test name
-	 * @param testLib the test lib
+	 * @param testName   the test name
+	 * @param testLib    the test lib
 	 * @throws Exception the exception
 	 */
-	public void writeBuildGradleFile(String path,String command, String testSrcDir, String testName, String testLib)
-				throws Exception {
-		Path buildGradlePath = Paths.get(path,"build.gradle");
+	public void writeBuildGradleFile(String path, String command, String testSrcDir, String testName,
+			ArrayList<String> testLib) throws Exception {
+		Path buildGradlePath = Paths.get(path, "build.gradle");
 		File buildGradleFile = buildGradlePath.toFile();
 		String editLine;
 		try {
@@ -77,35 +78,40 @@ public class GradleTools {
 			for (String line : template) {
 				if (line.contains("MAIN_CLASS")) {
 					if ("run".equals(command)) {
-						editLine = "mainClassName = \'";
-						if (!"".equals(testSrcDir)) editLine += testSrcDir + ".";
-						editLine += testName + "\'";
-						bw.write(editLine+"\n");
+						editLine = "application {\n";
+						editLine += "   mainClass = \'";
+						if (!"".equals(testSrcDir))
+							editLine += testSrcDir + ".";
+						editLine += testName + "\'\n";
+						editLine += "}\n";
+						bw.write(editLine);
 					}
 				} else if (line.contains("IMP_FILES")) {
-					if (!"".equals(testLib)) {
-						editLine = "\timplementation files(\'"+testLib+"\')";
-						bw.write(editLine+"\n");
-						editLine = "\ttestImplementation files(\'"+testLib+"\')";
-						bw.write(editLine+"\n");	
+					if (!testLib.isEmpty()) {
+						for (String lib : testLib) {
+							editLine = "\timplementation files(\'" + lib + "\')";
+							bw.write(editLine + "\n");
+							editLine = "\ttestImplementation files(\'" + lib + "\')";
+							bw.write(editLine + "\n");
+						}
 					}
-					
+
 				} else if (line.contains("SRC_DIR")) {
 					if (!"".equals(testSrcDir)) {
-						editLine = line.replaceAll("SRC_DIR", "src/"+testSrcDir+"\",\"src");
+						editLine = line.replaceAll("SRC_DIR", "src/" + testSrcDir + "\",\"src");
 					} else {
 						editLine = line.replaceAll("SRC_DIR", "src");
 					}
-					bw.write(editLine+"\n");
-				} else 
-					bw.write(line+"\n");
+					bw.write(editLine + "\n");
+				} else
+					bw.write(line + "\n");
 			}
 			bw.flush();
 			bw.close();
-			System.out.println("-I- Created build.gradle for test "+testName+" in "+path);
+			System.out.println("-I- Created build.gradle for test " + testName + " in " + path);
 
 		} catch (IOException e) {
-			System.out.println("-E- Unable to create build.gradle file for test "+testName+" in "+path);
+			System.out.println("-E- Unable to create build.gradle file for test " + testName + " in " + path);
 			throw new Exception();
 		}
 	}

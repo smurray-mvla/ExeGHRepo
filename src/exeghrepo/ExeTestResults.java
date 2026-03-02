@@ -60,21 +60,24 @@ public class ExeTestResults {
 	 */
 	boolean processTestResults(String testName, ArrayList<String> resultsLog) {
 		boolean isGrader =  testName.contains("Grader");
-		boolean isTest = testName.endsWith("Test");
+		boolean isTest = testName.matches(".*Tests?$") || testName.matches(".*Tester$");
 		for (String line: resultsLog) {
-			if (line.matches("^.*> Task\\s+:compileJava\\s*$")) compJava = true;
-			if (line.matches("^.*> Task\\s+:compileTestJava\\s*$")) compJunit = true;
+			if ((line.matches("^.*> Task\\s+:compileJava\\s*$")) ||
+				(line.matches("^.*> Task\\s+:compileJava\\s*UP-TO-DATE\\s*$")))	compJava = true;
+			if ((line.matches("^.*> Task\\s+:compileTestJava\\s*$")) ||
+				(line.matches("^.*> Task\\s+:compileTestJava\\s*UP-TO-DATE\\s*$")))	compJunit = true;
 			if (line.matches("^.*> Task\\s+:test\\s*$")) exeTest = true;
 			if ((line.matches("^.*"+testName+" > (\\S*)\\s?.*PASSED.*$") ||
-				 (isGrader && line.matches("^.*Test.*PASSED.*")))) {
+				 (isGrader && line.matches("^.*"+testName+".*PASSED.*")))) {
 				subTestName = (!isGrader && isTest) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
 				exeGHRepo.recordDetailedTestResults(testName,subTestName,passedTest+failedTest,"PASSED");
-				passedTest++;			}
+				passedTest++;			
+			}
 			if (line.matches("^.*"+testName+" > .*Timed Out FAILED.*$")) timedOut = true;
 			else if ((line.matches("^.*"+testName+" > (\\S*)\\s?.*FAILED.*$") ||
-					 (isGrader && line.matches("^.*Test.*FAILED.*")))) {
+					 (isGrader && line.matches("^.*"+testName+".*FAILED.*")))) {
 				subTestName = (!isGrader) ? line.replaceAll(".*> (\\S+)\\(.*","$1") : testName;
-				if (!subTestName.startsWith("test"))
+				if (!subTestName.startsWith("test") && !subTestName.endsWith("Test"))
 					System.out.println("-I- Non-test related failure: "+line);
 				else { 
 					System.out.println("-F- "+line);

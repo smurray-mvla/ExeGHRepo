@@ -2,6 +2,7 @@ package exeghrepo;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.TreeSet;
 
 import org.kohsuke.github.GHOrganization;
 import org.kohsuke.github.GHRepository;
@@ -45,7 +46,7 @@ public class GitTools {
 	 * @param tag the tag
 	 * @return the repo UR ls
 	 */
-	ArrayList<String> getRepoURLs(String organization,String assignment, String tag) {
+	ArrayList<String> getRepoURLs(String organization,String assignment, String tag, TreeSet<String> studentRepos) {
 		ArrayList<String> urlList = new ArrayList<>();
 		String match = organization + "/" + assignment;
 		if (!"".equals(tag))
@@ -54,8 +55,11 @@ public class GitTools {
 		System.out.println("-I- Getting all repos that match "+match);
 		PagedIterable<GHRepository> repos = ghOrg.listRepositories();
 		for (GHRepository repo : repos) {
-			if (repo.getFullName().matches(match))
-				urlList.add(repo.getSshUrl());
+			if (repo.getFullName().matches(match)) {
+				String repoName = repo.getFullName().replaceAll(".*("+assignment+"-.*)","$1");
+				if ((studentRepos == null) || studentRepos.contains(repoName)) 
+					urlList.add(repo.getSshUrl());
+			}
 		}
 		return urlList;
 	}

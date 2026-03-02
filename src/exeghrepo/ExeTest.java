@@ -1,5 +1,7 @@
 package exeghrepo;
 
+import java.util.ArrayList;
+
 // TODO: Auto-generated Javadoc
 /**
  * The Class ExeTest.
@@ -16,7 +18,7 @@ public class ExeTest {
 	String sourcePath;
 	
 	/** The lib. */
-	String lib;
+	ArrayList<String> lib;
 	
 	/** The cmp. */
 	String cmp;
@@ -42,7 +44,7 @@ public class ExeTest {
 		this.testName = testName;
 		testMode = "";
 		sourcePath = "";
-		lib = "";
+		lib = new ArrayList<String>();
 		cmp = "";
 		vim = "";
 		args = "";
@@ -91,7 +93,7 @@ public class ExeTest {
 	 *
 	 * @return the lib
 	 */
-	public String getLib() {
+	public ArrayList<String> getLib() {
 		return lib;
 	}
 
@@ -100,8 +102,8 @@ public class ExeTest {
 	 *
 	 * @param lib the new lib
 	 */
-	public void setLib(String lib) {
-		this.lib = lib;
+	public void addLib(String library) {
+		lib.add(library);
 	}
 
 	/**
