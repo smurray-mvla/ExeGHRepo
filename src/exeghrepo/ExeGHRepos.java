@@ -100,6 +100,8 @@ public class ExeGHRepos {
 	private boolean skipRepoExe = false;
 	
 	private boolean useRoster = false; 
+	
+	private boolean gradleClean = false;
 
 	/** The test index. */
 	private int testIndex = -1;
@@ -135,6 +137,9 @@ public class ExeGHRepos {
 
 	/** The gradle cmd. */
 	private String[] gradleCmd;
+	
+	private final String VERSION = "2";
+	private final String SUB_VERSION = "1";
 
 	/**
 	 * Gets the operating system.
@@ -312,6 +317,9 @@ public class ExeGHRepos {
 					break;
 				case "-k":
 					keep = true;
+					break;
+				case "-clean":
+					gradleClean = true;
 					break;
 				default:
 					printArgsErrorAndExit(args, i);
@@ -961,6 +969,15 @@ public class ExeGHRepos {
 		if (remoteSHA.equals(localSHA)) {
 			System.out.println("-I-  Local Repo SHA matches Remote Repo SHA (" + head + ")");
 			skipRepoExe = incremental && !isFailingClone(repo);
+			if (skipRepoExe) {
+				// add a delay time if skipping a repo so don't overwhelm github
+				try {
+					System.out.println("Skipping Repo - delaying 3 seconds for github...");
+					Thread.sleep(3000);
+				} catch (InterruptedException e) {
+					System.out.println("SkipRepo Delay time interrupted...");
+				}
+			}
 			return (!skipRepoExe);
 		}
 		return true;
@@ -1205,12 +1222,14 @@ public class ExeGHRepos {
 	private void executeTest(ExeTest test) {
 		clearExistingTestResults(test);
 		ProcessResults results;
-		String[] cmd = { gradleCmd[0], gradleCmd[1], gradleCmd[2] + " clean" };
-		System.out.println("-I- Executing Gradle clean\n");
-		results = executeProcess(cmd, new File(repoPath), 0);
-		results.printOutput();
+		if (gradleClean) {
+			String[] cmd = { gradleCmd[0], gradleCmd[1], gradleCmd[2],"clean"};
+			System.out.println("-I- Executing Gradle clean\n");
+			results = executeProcess(cmd, new File(repoPath), 0);
+			results.printOutput();
+		}
 		if ("test".equals(test.getTestMode())) {
-			String[] testCmd = { gradleCmd[0], gradleCmd[1], gradleCmd[2] + " test --tests " + test.getTestName() };
+			String[] testCmd = { gradleCmd[0], gradleCmd[1], gradleCmd[2],"test","--tests", test.getTestName() };
 			System.out.println("-I- Executing Gradle test: " + test.getTestName());
 			results = executeTimeoutProcess(testCmd, test.getTestName(), new File(repoPath), test.getTimeout());
 			results.printOutput();
@@ -1745,6 +1764,7 @@ public class ExeGHRepos {
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		ExeGHRepos jExe = new ExeGHRepos();
+		System.out.println("ExeGHRepos - Version "+jExe.VERSION+"."+jExe.SUB_VERSION);
 		jExe.processArgs(args);
 		jExe.readConfigFile();
 		jExe.executeFlow();
