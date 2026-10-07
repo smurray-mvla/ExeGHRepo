@@ -77,7 +77,7 @@ public class GradleTools {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(buildGradleFile));
 			for (String line : template) {
 				if (line.contains("MAIN_CLASS")) {
-					if ("run".equals(command)) {
+					if ("run".equals(command) || "log".equals(command)) {
 						editLine = "application {\n";
 						editLine += "   mainClass = \'";
 						if (!"".equals(testSrcDir))

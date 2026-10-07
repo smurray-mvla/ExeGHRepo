@@ -139,7 +139,7 @@ public class ExeGHRepos {
 	private String[] gradleCmd;
 	
 	private final String VERSION = "2";
-	private final String SUB_VERSION = "1";
+	private final String SUB_VERSION = "2";
 
 	/**
 	 * Gets the operating system.
@@ -568,6 +568,7 @@ public class ExeGHRepos {
 		ArrayList<String> repoList = new ArrayList<>();
 		System.out.print("Repository");
 		for (ExeTest test : testList) {
+			if ("log".equals(test.getTestMode())) continue;
 			System.out.print("," + test.getTestName());
 		}
 		System.out.println();
@@ -576,6 +577,7 @@ public class ExeGHRepos {
 			if (testResults.containsKey(repo)) {
 				System.out.print(repo);
 				for (ExeTest test : testList) {
+					if ("log".equals(test.getTestMode())) continue;					
 					System.out.print("," + testResults.get(repo).get(test.getTestName()));
 				}
 				System.out.println();
@@ -629,7 +631,7 @@ public class ExeGHRepos {
 	private void processTestResultsCSV() {
 		File testResultsFile = new File(path + "/" + testCSV);
 		detailedTestResults = new HashMap<String, HashMap<String, ArrayList<String>>>();
-		if (testResultsFile.exists()) {
+		if (testResultsFile.exists() && testResultsFile.length() > 0) {
 			String line = null;
 			try (BufferedReader br = new BufferedReader(new FileReader(testResultsFile))) {
 				detailTestOrderMap = new HashMap<String, ArrayList<String>>();
@@ -664,6 +666,7 @@ public class ExeGHRepos {
 						HashMap<String, String> repoTestResults = new HashMap<>();
 						int index = 1;
 						for (ExeTest test : testList) {
+							if ("log".equals(test.getTestMode())) continue;
 							repoTestResults.put(test.getTestName(), tokens[index++]);
 						}
 						testResults.put(repo, repoTestResults);
@@ -1242,11 +1245,13 @@ public class ExeGHRepos {
 			results = executeTimeoutProcess(runCmd, test.getTestName(), new File(repoPath), test.getTimeout());
 			results.printOutput();
 		}
-		updateTestResultOutput(test, results);
+		if (!("log".equals(test.getTestMode())))
+			updateTestResultOutput(test, results);
 		if (results.getStatus() == -2)
 			results.getOutput().add(test.getTestName() + " > Timed Out FAILED");
 		writeLogFile(test.getTestName(), results.getOutput());
-		updateTestResultsHash(test, results);
+		if (!("log".equals(test.getTestMode())))
+			updateTestResultsHash(test, results);
 	}
 
 	/**
@@ -1599,6 +1604,7 @@ public class ExeGHRepos {
 		bw.write("Repository");
 		for (ExeTest test : testList) {
 			String testName = test.getTestName();
+			if ("log".equals(test.getTestMode())) continue;
 			for (String subTestName : detailTestOrderMap.get(testName)) {
 				bw.write("," + testName);
 				if (!testName.equals(subTestName))
@@ -1620,6 +1626,7 @@ public class ExeGHRepos {
 		boolean repoExists = detailedTestResults.containsKey(currRepo);
 		for (ExeTest test : testList) {
 			String testName = test.getTestName();
+			if ("log".equals(test.getTestMode())) continue;
 			String subTestName;
 			String[] results = new String[detailTestOrderMap.get(testName).size()];
 			boolean testExecuted = false;
@@ -1713,6 +1720,7 @@ public class ExeGHRepos {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(logFile));
 			bw.write("Repository");
 			for (ExeTest test : testList) {
+				if ("log".equals(test.getTestMode())) continue;
 				bw.write("," + test.getTestName());
 			}
 			bw.write("\n");
@@ -1727,6 +1735,7 @@ public class ExeGHRepos {
 			for (String repo : repoSet) {
 				bw.write(repo);
 				for (ExeTest test : testList) {
+					if ("log".equals(test.getTestMode())) continue;
 					if (testResults.containsKey(repo)) {
 						if (testResults.get(repo).containsKey(test.getTestName())) {
 							bw.write("," + testResults.get(repo).get(test.getTestName()));
